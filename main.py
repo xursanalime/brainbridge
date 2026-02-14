@@ -1,159 +1,89 @@
 import telebot
-from telebot import types
 import json
 import os
 import random
 import re
 
-# ================= CONFIG =================
-
-TOKEN = "8402764062:AAHICTIKlOi26FfZIgfqyzxJt3dSMeaBqoU"
-ADMIN_ID = 6651718779
-
-DATA_FILE = "words.json"
-STAT_FILE = "stats.json"
-
+TOKEN = "8249270236:AAHhVgYuUI0cHbufR0I87322LIHvFFvmy8Y"
 bot = telebot.TeleBot(TOKEN)
 
-user_lang = {}
-user_state = {}
-quiz_data = {}
-quiz_mode = {}
+DATA_FILE = "data.json"
 
-# ================= INIT =================
+# ================= DATA =================
 
-for f in [DATA_FILE, STAT_FILE]:
-    if not os.path.exists(f):
-        with open(f, "w", encoding="utf-8") as file:
-            json.dump({}, file)
-
-
-# ================= DB =================
-
-def load_words():
-    with open(DATA_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
-
-
-def save_words(data):
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=4, ensure_ascii=False)
-
-
-def load_stats():
-    with open(STAT_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
-
-
-def save_stats(data):
-    with open(STAT_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=4, ensure_ascii=False)
-
-
-def clear_state(cid):
-    user_state.pop(cid, None)
-    quiz_data.pop(cid, None)
-    quiz_mode.pop(cid, None)
-
-
-# ================= TEXT =================
-
-TEXTS = {
-
-    "uz": {
-        "menu": "Asosiy menyu 👇",
-        "add": "➕ So‘z qo‘shish",
-        "quiz": "📝 Quiz",
-        "stat": "📊 Statistika",
-        "admin": "⚙️ Admin",
-        "back": "⬅️ Orqaga",
-
-        "mode": "Test turini tanlang:",
-        "choice": "🟢 Variant",
-        "write": "✍️ Yozma",
-        "unit": "Unit tanlang:",
-
-        "correct": "✅ To‘g‘ri!",
-        "wrong": "❌ Xato! Javob: {a}",
-        "finish": "🏁 Tugadi\nTo‘g‘ri: {c}\nXato: {w}",
-
-        "format":
-        "Format:\n\n"
-        "Unit1\n"
-        "apple=olma\n"
-        "book=kitob\n\n"
-        "Max 20 👇"
-    },
-
-    "en": {
-        "menu": "Main menu 👇",
-        "add": "➕ Add",
-        "quiz": "📝 Quiz",
-        "stat": "📊 Stats",
-        "admin": "⚙️ Admin",
-        "back": "⬅️ Back",
-
-        "mode": "Choose mode:",
-        "choice": "🟢 Choice",
-        "write": "✍️ Write",
-        "unit": "Choose unit:",
-
-        "correct": "✅ Correct!",
-        "wrong": "❌ Wrong! Answer: {a}",
-        "finish": "🏁 Finished\nCorrect: {c}\nWrong: {w}",
-
-        "format":
-        "Format:\n\n"
-        "Unit1\n"
-        "apple=olma\n"
-        "book=kitob\n\n"
-        "Max 20 👇"
-    },
-
-    "ru": {
-        "menu": "Главное меню 👇",
-        "add": "➕ Добавить",
-        "quiz": "📝 Тест",
-        "stat": "📊 Статистика",
-        "admin": "⚙️ Админ",
-        "back": "⬅️ Назад",
-
-        "mode": "Выберите режим:",
-        "choice": "🟢 Варианты",
-        "write": "✍️ Написать",
-        "unit": "Выберите модуль:",
-
-        "correct": "✅ Верно!",
-        "wrong": "❌ Ошибка! Ответ: {a}",
-        "finish": "🏁 Завершено\nВерно: {c}\nОшибки: {w}",
-
-        "format":
-        "Формат:\n\n"
-        "Unit1\n"
-        "apple=olma\n"
-        "book=kitob\n\n"
-        "Max 20 👇"
+def default_data():
+    return {
+        "new_words": {},
+        "boxes": {
+            "1": {},
+            "2": {},
+            "3": {},
+            "4": {},
+            "5": {}
+        }
     }
-}
+
+def load_data():
+    if not os.path.exists(DATA_FILE):
+        return default_data()
+
+    with open(DATA_FILE, "r", encoding="utf-8") as f:
+        try:
+            data = json.load(f)
+        except:
+            data = default_data()
+
+    if "new_words" not in data:
+        data["new_words"] = {}
+    if "boxes" not in data:
+        data["boxes"] = default_data()["boxes"]
+
+    return data
+
+def save_data(data):
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
+
+# ================= STATES =================
+
+user_state = {}
+quiz_state = {}
+
+# ================= MENUS =================
+
+def main_menu():
+    markup = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True)
+
+    # 1-qator
+    markup.row("➕ So'z qo‘shish", "📝 Test (Yangi)")
+
+    # 2-qator (🔥 shu yerda bir qatorda)
+    markup.row("🔁 Takrorlash", "❌ Tozalash")
+
+    return markup
 
 
-def t(cid, key):
-    return TEXTS[user_lang.get(cid, "uz")][key]
+def back_menu():
+    markup = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True)
+    markup.add("🔙 Orqaga")
+    return markup
 
+def box_menu():
+    data = load_data()
+    boxes = data["boxes"]
 
-# ================= MENU =================
+    markup = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True)
 
-def show_menu(cid):
+    markup.row(f"📦 Quti 1 ({len(boxes['1'])})",
+               f"📦 Quti 2 ({len(boxes['2'])})")
 
-    clear_state(cid)
+    markup.row(f"📦 Quti 3 ({len(boxes['3'])})",
+               f"📦 Quti 4 ({len(boxes['4'])})")
 
-    kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    # 🔥 Quti 5 va Orqaga bir qatorda
+    markup.row(f"📦 Quti 5 ({len(boxes['5'])})", "🔙 Orqaga")
 
-    kb.add(t(cid, "add"))
-    kb.add(t(cid, "quiz"), t(cid, "stat"))
-    kb.add(t(cid, "admin"))
-
-    bot.send_message(cid, t(cid, "menu"), reply_markup=kb)
+    return markup
 
 
 # ================= START =================
@@ -161,332 +91,273 @@ def show_menu(cid):
 @bot.message_handler(commands=["start"])
 def start(message):
 
-    clear_state(message.chat.id)
+    text = """
+📚 MNEMONIKA WORD BOT
 
-    kb = types.InlineKeyboardMarkup()
+Bu bot so‘zlarni oddiy yodlash emas,
+balki 🧠 Leitner (qutilar) tizimi orqali uzoq muddatli xotiraga joylash uchun mo‘ljallangan.
 
-    kb.add(
-        types.InlineKeyboardButton("🇺🇿 O‘zbek", callback_data="lang_uz"),
-        types.InlineKeyboardButton("🇬🇧 English", callback_data="lang_en"),
-        types.InlineKeyboardButton("🇷🇺 Русский", callback_data="lang_ru")
-    )
+🔹 Qanday ishlaydi?
 
-    bot.send_message(message.chat.id, "Choose language:", reply_markup=kb)
+1️⃣ ➕ So‘z qo‘shish  
+   English=Uzbek formatda yangi so‘zlar qo‘shasiz.
 
+2️⃣ 📝 Test (Yangi)  
+   Yangi so‘zlar birinchi marta test qilinadi.  
+   To‘g‘ri javob → 📦 Quti 1 ga tushadi.
 
-@bot.callback_query_handler(func=lambda c: c.data.startswith("lang_"))
-def set_lang(call):
+3️⃣ 🔁 Takrorlash  
+   Qutilar orqali takrorlash boshlanadi:
 
-    user_lang[call.from_user.id] = call.data.split("_")[1]
-    show_menu(call.from_user.id)
+   📦 Quti 1 → 1 kun
+   📦 Quti 2 → 3 kun
+   📦 Quti 3 → 7 kun
+   📦 Quti 4 → 14 kun
+   📦 Quti 5 → 30 kun
 
+✅ To‘g‘ri javob → keyingi qutiga o‘tadi  
+❌ Xato javob → Quti 1 ga qaytadi  
 
-# ================= ADD =================
+🎯 Maqsad — so‘zni Quti 5 gacha yetkazish.
 
-@bot.message_handler(func=lambda m: m.text in [
-    TEXTS["uz"]["add"], TEXTS["en"]["add"], TEXTS["ru"]["add"]
-])
-def add_start(message):
+📊 Har testdan keyin natija va statistika ko‘rsatiladi.
 
-    cid = message.chat.id
-
-    clear_state(cid)
-
-    user_state[cid] = "add"
-
-    bot.send_message(cid, t(cid, "format"))
-
-
-@bot.message_handler(func=lambda m: user_state.get(m.chat.id) == "add")
-def add_process(message):
-
-    cid = message.chat.id
-
-    lines = message.text.strip().split("\n")
-
-    if len(lines) < 2:
-        bot.send_message(cid, "❌ Kamida 1 ta so‘z kiriting")
-        return
-
-    unit = lines[0].strip()
-    pairs = lines[1:]
-
-    if len(pairs) > 20:
-        bot.send_message(cid, "❌ Max 20 ta so‘z mumkin")
-        return
-
-    data = load_words()
-
-    if unit not in data:
-        data[unit] = {}
-
-    # 🔹 Barcha inglizcha so‘zlar
-    all_eng = set()
-
-    for u in data.values():
-        for w in u:
-            all_eng.add(w.lower())
-
-    added = 0
-    errors = []
-
-    for i, line in enumerate(pairs, 1):
-
-        if "=" not in line:
-            errors.append(f"{i}: {line} (no =)")
-            continue
-
-        eng, uz = line.split("=", 1)
-
-        eng = eng.strip()
-        uz = uz.strip()
-
-        if not eng or not uz:
-            errors.append(f"{i}: {line} (empty)")
-            continue
-
-        if not re.fullmatch(r"[A-Za-z ]+", eng):
-            errors.append(f"{i}: {eng} (invalid)")
-            continue
-
-        if eng.lower() in all_eng:
-            errors.append(f"{i}: {eng} (already exists)")
-            continue
-
-        data[unit][eng] = uz
-        all_eng.add(eng.lower())
-        added += 1
-
-    save_words(data)
-
-    user_state.pop(cid, None)
-
-    msg = f"✅ {added} ta qo‘shildi\n"
-
-    if errors:
-        msg += "\n❌ Xatolar:\n" + "\n".join(errors)
-
-    bot.send_message(cid, msg)
-
-    show_menu(cid)
-
-
-# ================= QUIZ =================
-
-@bot.message_handler(func=lambda m: m.text in [
-    TEXTS["uz"]["quiz"], TEXTS["en"]["quiz"], TEXTS["ru"]["quiz"]
-])
-def quiz_menu(message):
-
-    clear_state(message.chat.id)
-
-    kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
-
-    kb.add(t(message.chat.id, "choice"))
-    kb.add(t(message.chat.id, "write"))
-    kb.add(t(message.chat.id, "back"))
-
-    bot.send_message(message.chat.id, t(message.chat.id, "mode"), reply_markup=kb)
-
-
-@bot.message_handler(func=lambda m: m.text in [
-    TEXTS["uz"]["choice"], TEXTS["en"]["choice"], TEXTS["ru"]["choice"],
-    TEXTS["uz"]["write"], TEXTS["en"]["write"], TEXTS["ru"]["write"]
-])
-def quiz_mode_select(message):
-
-    if "🟢" in message.text:
-        quiz_mode[message.chat.id] = "choice"
-    else:
-        quiz_mode[message.chat.id] = "write"
-
-    data = load_words()
-
-    kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
-
-    for u in data:
-        kb.add(u)
-
-    kb.add(t(message.chat.id, "back"))
-
-    bot.send_message(message.chat.id, t(message.chat.id, "unit"), reply_markup=kb)
-
-
-@bot.message_handler(func=lambda m: m.chat.id in quiz_mode and m.text in load_words())
-def quiz_start(message):
-
-    unit = message.text
-
-    data = load_words()
-
-    words = list(data[unit].items())
-    random.shuffle(words)
-
-    quiz_data[message.chat.id] = {
-        "words": words,
-        "i": 0,
-        "score": 0,
-        "ans": ""
-    }
-
-    ask(message.chat.id)
-
-
-def ask(cid):
-
-    q = quiz_data[cid]
-
-    if q["i"] >= len(q["words"]):
-        finish(cid)
-        return
-
-    eng, uz = q["words"][q["i"]]
-
-    q["ans"] = uz
-
-    kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
-
-    if quiz_mode[cid] == "choice":
-
-        all_words = []
-
-        for u in load_words().values():
-            all_words += list(u.values())
-
-        opts = [uz]
-
-        while len(opts) < 4:
-            x = random.choice(all_words)
-            if x not in opts:
-                opts.append(x)
-
-        random.shuffle(opts)
-
-        for o in opts:
-            kb.add(o)
-
-    kb.add(t(cid, "back"))
-
-    bot.send_message(cid, f"{eng} = ?", reply_markup=kb)
-
-
-@bot.message_handler(func=lambda m: m.chat.id in quiz_data)
-def answer(message):
-
-    cid = message.chat.id
-
-    if message.text == t(cid, "back"):
-        show_menu(cid)
-        return
-
-    q = quiz_data[cid]
-
-    user = message.text.lower().strip()
-    correct = q["ans"].lower()
-
-    stats = load_stats()
-
-    if str(cid) not in stats:
-        stats[str(cid)] = {"ok": 0, "bad": 0}
-
-    if user == correct:
-
-        q["score"] += 1
-        stats[str(cid)]["ok"] += 1
-
-        bot.send_message(cid, t(cid, "correct"))
-
-    else:
-
-        stats[str(cid)]["bad"] += 1
-
-        bot.send_message(cid, t(cid, "wrong").format(a=q["ans"]))
-
-    save_stats(stats)
-
-    q["i"] += 1
-
-    ask(cid)
-
-
-def finish(cid):
-
-    q = quiz_data[cid]
-
-    bot.send_message(
-        cid,
-        t(cid, "finish").format(
-            c=q["score"],
-            w=len(q["words"]) - q["score"]
-        )
-    )
-
-    show_menu(cid)
-
-
-# ================= STAT =================
-
-@bot.message_handler(func=lambda m: m.text in [
-    TEXTS["uz"]["stat"], TEXTS["en"]["stat"], TEXTS["ru"]["stat"]
-])
-def stat(message):
-
-    clear_state(message.chat.id)
-
-    stats = load_stats()
-
-    s = stats.get(str(message.chat.id), {"ok": 0, "bad": 0})
-
-    bot.send_message(message.chat.id, f"✅ {s['ok']} | ❌ {s['bad']}")
-
-
-# ================= ADMIN =================
-
-@bot.message_handler(func=lambda m: m.text in [
-    TEXTS["uz"]["admin"], TEXTS["en"]["admin"], TEXTS["ru"]["admin"]
-])
-def admin(message):
-
-    clear_state(message.chat.id)
+Boshlash uchun tugmalardan birini tanlang 👇
+"""
 
     bot.send_message(
         message.chat.id,
-        "👨‍💻 Admin: @xursanalime"
+        text,
+        reply_markup=main_menu()
     )
 
-    show_menu(message.chat.id)
+# ================= ORQAGA =================
 
+@bot.message_handler(func=lambda m: m.text == "🔙 Orqaga")
+def go_back(message):
+    quiz_state.pop(message.chat.id, None)
+    user_state.pop(message.chat.id, None)
+    bot.send_message(message.chat.id, "Bosh menyu", reply_markup=main_menu())
 
-# ================= BACK =================
+# ================= ADD WORDS =================
 
-@bot.message_handler(func=lambda m: m.text in [
-    TEXTS["uz"]["back"], TEXTS["en"]["back"], TEXTS["ru"]["back"]
-])
-def back(message):
+@bot.message_handler(func=lambda m: m.text == "➕ So'z qo‘shish")
+def add_words(message):
+    user_state[message.chat.id] = "adding"
+    bot.send_message(message.chat.id,
+                     "Format:\nenglish=uzbek",
+                     reply_markup=back_menu())
 
-    show_menu(message.chat.id)
+@bot.message_handler(func=lambda m: user_state.get(m.chat.id) == "adding")
+def process_words(message):
 
+    data = load_data()
+    count = 0
 
-@bot.message_handler(commands=["clearall"])
-def clear_all(message):
+    for line in message.text.split("\n"):
+        if "=" in line:
+            eng, uz = line.split("=", 1)
+        elif "-" in line:
+            eng, uz = line.split("-", 1)
+        else:
+            continue
 
-    cid = message.chat.id
+        eng = eng.strip().lower()
+        uz = uz.strip().lower()
 
-    # Faqat admin ishlata oladi
-    if cid != ADMIN_ID:
-        bot.send_message(cid, "❌ Siz admin emassiz")
+        if eng and uz:
+            data["new_words"][eng] = {"uz": uz}
+            count += 1
+
+    save_data(data)
+    user_state.pop(message.chat.id, None)
+
+    bot.send_message(message.chat.id,
+                     f"✅ {count} ta so‘z saqlandi!",
+                     reply_markup=main_menu())
+
+# ================= TEST (YANGI) =================
+
+@bot.message_handler(func=lambda m: m.text == "📝 Test (Yangi)")
+def start_new_test(message):
+
+    data = load_data()
+    words = list(data["new_words"].items())
+
+    if not words:
+        bot.send_message(message.chat.id, "Yangi so‘z yo‘q.")
         return
 
-    clear_state(cid)
+    random.shuffle(words)
 
-    save_words({})
-    save_stats({})
+    quiz_state[message.chat.id] = {
+        "type": "new",
+        "words": words,
+        "index": 0,
+        "correct": 0
+    }
 
-    bot.send_message(cid, "✅ Barcha so‘zlar va statistika tozalandi!")
+    ask_question(message.chat.id)
 
-    show_menu(cid)
+# ================= TAKRORLASH =================
 
+@bot.message_handler(func=lambda m: m.text == "🔁 Takrorlash")
+def repetition_info(message):
 
-# ================= RUN =================
+    info_text = """
+🔁 TAKRORLASH TIZIMI (Leitner)
 
-bot.infinity_polling()
+📦 Quti 1 – 1 kun
+📦 Quti 2 – 3 kun
+📦 Quti 3 – 7 kun
+📦 Quti 4 – 14 kun
+📦 Quti 5 – 30 kun
+
+To‘g‘ri → keyingi quti
+Xato → Quti 1 ga qaytadi
+"""
+
+    bot.send_message(message.chat.id, info_text, reply_markup=box_menu())
+
+# ================= QUTI TANLASH =================
+
+@bot.message_handler(func=lambda m: m.text and "Quti" in m.text)
+def open_box(message):
+
+    match = re.search(r"Quti\s+(\d)", message.text)
+    if not match:
+        return
+
+    box_number = match.group(1)
+
+    data = load_data()
+    box_words = data["boxes"].get(box_number, {})
+
+    if not box_words:
+        bot.send_message(message.chat.id, "Bu quti bo‘sh.", reply_markup=box_menu())
+        return
+
+    words = list(box_words.items())
+
+    quiz_state[message.chat.id] = {
+        "type": "box",
+        "box": box_number,
+        "words": words,
+        "index": 0,
+        "correct": 0,
+        "wrong": 0
+    }
+
+    ask_question(message.chat.id)
+
+# ================= SAVOL =================
+
+def ask_question(chat_id):
+
+    quiz = quiz_state.get(chat_id)
+    if not quiz:
+        return
+
+    if quiz["index"] >= len(quiz["words"]):
+        finish_test(chat_id)
+        return
+
+    eng, info = quiz["words"][quiz["index"]]
+    uz = info["uz"]
+
+    question = f"({quiz['index']+1}/{len(quiz['words'])})\n🇺🇿 {uz.upper()} → ?"
+
+    quiz["current_answer"] = eng
+
+    bot.send_message(chat_id, question, reply_markup=back_menu())
+
+# ================= JAVOB =================
+
+@bot.message_handler(func=lambda m: m.chat.id in quiz_state)
+def check_answer(message):
+
+    if message.text == "🔙 Orqaga":
+        return
+
+    chat_id = message.chat.id
+    quiz = quiz_state[chat_id]
+
+    user_answer = message.text.strip().lower()
+    correct_answer = quiz["current_answer"].lower()
+
+    data = load_data()
+    eng, info = quiz["words"][quiz["index"]]
+
+    if user_answer == correct_answer:
+        quiz["correct"] += 1
+        bot.send_message(chat_id, "✅ To‘g‘ri!")
+
+        if quiz["type"] == "new":
+            data["boxes"]["1"][eng] = info
+            data["new_words"].pop(eng, None)
+
+        elif quiz["type"] == "box":
+            current_box = quiz["box"]
+            next_box = str(min(int(current_box) + 1, 5))
+
+            data["boxes"][current_box].pop(eng, None)
+            data["boxes"][next_box][eng] = info
+
+    else:
+        bot.send_message(chat_id, f"❌ Xato! {correct_answer}")
+
+        if quiz["type"] == "box":
+            current_box = quiz["box"]
+            data["boxes"][current_box].pop(eng, None)
+            data["boxes"]["1"][eng] = info
+
+    save_data(data)
+
+    quiz["index"] += 1
+    ask_question(chat_id)
+
+# ================= STATISTIKA =================
+
+def finish_test(chat_id):
+
+    quiz = quiz_state[chat_id]
+
+    total = len(quiz["words"])
+    correct = quiz["correct"]
+    wrong = total - correct
+    percent = int((correct / total) * 100)
+
+    if percent >= 90:
+        level = "🔥 Zo'r natija!"
+    elif percent >= 70:
+        level = "👍 Yaxshi!"
+    elif percent >= 50:
+        level = "🙂 O‘rtacha"
+    else:
+        level = "📉 Ko‘proq takrorlash kerak"
+
+    text = f"""
+🏁 Test tugadi!
+
+📊 Natija: {percent}%
+{level}
+
+📚 Jami savol: {total}
+✅ To‘g‘ri: {correct}
+❌ Xato: {wrong}
+"""
+
+    bot.send_message(chat_id, text, reply_markup=main_menu())
+    quiz_state.pop(chat_id, None)
+
+# ================= CLEAR =================
+
+@bot.message_handler(func=lambda m: m.text == "❌ Tozalash")
+def clear_all(message):
+    save_data(default_data())
+    bot.send_message(message.chat.id,
+                     "Hammasi tozalandi.",
+                     reply_markup=main_menu())
+
+print("Bot ishlayapti...")
+bot.infinity_polling(skip_pending=True)

@@ -1,8 +1,10 @@
 {
-    "Unit1": {
-        "car": "mashina",
-        "apple": "olma",
-        "book": "kitob",
-        "money": "pul"
+    "new_words": {},
+    "boxes": {
+        "1": {},
+        "2": {},
+        "3": {},
+        "4": {},
+        "5": {}
     }
 }
