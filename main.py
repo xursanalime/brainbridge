@@ -5,8 +5,9 @@ import re
 import psycopg2
 import json
 
-TOKEN = os.getenv("8249270236:AAHh'VgYuUI0cHbufR0I87322LIHvFFvmy8Y")
-DATABASE_URL = os.getenv("postgresql://postgres:xDzvbvoDeuEFVhNhQcwhIztVUslQBZcM@postgres.railway.internal:5432/railway")
+TOKEN = os.getenv("BOT_TOKEN")
+DATABASE_URL = os.getenv("DATABASE_URL")
+
 
 bot = telebot.TeleBot(TOKEN)
 
