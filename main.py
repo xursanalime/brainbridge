@@ -3,11 +3,9 @@ import os
 import random
 import re
 import psycopg2
-import json
 
 TOKEN = os.getenv("BOT_TOKEN")
 DATABASE_URL = os.getenv("DATABASE_URL")
-
 
 bot = telebot.TeleBot(TOKEN)
 
@@ -19,15 +17,14 @@ cur = conn.cursor()
 
 cur.execute("""
 CREATE TABLE IF NOT EXISTS words (
-    eng TEXT PRIMARY KEY,
+    id SERIAL PRIMARY KEY,
+    user_id BIGINT,
+    eng TEXT,
     uz TEXT,
-    box INTEGER DEFAULT 0
+    box INTEGER DEFAULT 0,
+    UNIQUE(user_id, eng)
 )
 """)
-
-# box = 0 -> new_words
-# box = 1-5 -> qutilar
-
 
 # ================= STATES =================
 
@@ -49,12 +46,15 @@ def back_menu():
     return markup
 
 
-def box_menu():
+def box_menu(user_id):
     markup = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True)
 
     counts = {}
-    for i in range(1,6):
-        cur.execute("SELECT COUNT(*) FROM words WHERE box=%s", (i,))
+    for i in range(1, 6):
+        cur.execute(
+            "SELECT COUNT(*) FROM words WHERE user_id=%s AND box=%s",
+            (user_id, i)
+        )
         counts[i] = cur.fetchone()[0]
 
     markup.row(f"📦 Quti 1 ({counts[1]})",
@@ -67,23 +67,18 @@ def box_menu():
 
     return markup
 
-
 # ================= START =================
 
 @bot.message_handler(commands=["start"])
 def start(message):
-
     text = """
 📚 MNEMONIKA WORD BOT
 
 Bu bot Leitner tizimi orqali so‘zlarni uzoq muddatli xotiraga joylaydi.
 
 🎯 Maqsad — so‘zni Quti 5 gacha yetkazish.
-
-Boshlash uchun tugmalardan birini tanlang 👇
 """
     bot.send_message(message.chat.id, text, reply_markup=main_menu())
-
 
 # ================= ORQAGA =================
 
@@ -93,20 +88,20 @@ def go_back(message):
     user_state.pop(message.chat.id, None)
     bot.send_message(message.chat.id, "Bosh menyu", reply_markup=main_menu())
 
-
-# ================= ADD WORDS =================
+# ================= ADD WORD =================
 
 @bot.message_handler(func=lambda m: m.text == "➕ So'z qo‘shish")
 def add_words(message):
     user_state[message.chat.id] = "adding"
-    bot.send_message(message.chat.id,
-                     "Format:\nenglish=uzbek",
-                     reply_markup=back_menu())
-
+    bot.send_message(
+        message.chat.id,
+        "Format:\nenglish=uzbek",
+        reply_markup=back_menu()
+    )
 
 @bot.message_handler(func=lambda m: user_state.get(m.chat.id) == "adding")
 def process_words(message):
-
+    user_id = message.chat.id
     count = 0
 
     for line in message.text.split("\n"):
@@ -122,71 +117,85 @@ def process_words(message):
 
         if eng and uz:
             cur.execute("""
-                INSERT INTO words (eng, uz, box)
-                VALUES (%s,%s,0)
-                ON CONFLICT (eng)
+                INSERT INTO words (user_id, eng, uz, box)
+                VALUES (%s, %s, %s, 0)
+                ON CONFLICT (user_id, eng)
                 DO UPDATE SET uz=EXCLUDED.uz
-            """, (eng, uz))
+            """, (user_id, eng, uz))
             count += 1
 
-    user_state.pop(message.chat.id, None)
+    user_state.pop(user_id, None)
 
-    bot.send_message(message.chat.id,
-                     f"✅ {count} ta so‘z saqlandi!",
-                     reply_markup=main_menu())
-
+    bot.send_message(
+        user_id,
+        f"✅ {count} ta so‘z saqlandi!",
+        reply_markup=main_menu()
+    )
 
 # ================= TEST NEW =================
 
 @bot.message_handler(func=lambda m: m.text == "📝 Test (Yangi)")
 def start_new_test(message):
+    user_id = message.chat.id
 
-    cur.execute("SELECT eng, uz FROM words WHERE box=0")
+    cur.execute("""
+        SELECT eng, uz FROM words
+        WHERE user_id=%s AND box=0
+    """, (user_id,))
+
     words = cur.fetchall()
 
     if not words:
-        bot.send_message(message.chat.id, "Yangi so‘z yo‘q.")
+        bot.send_message(user_id, "Yangi so‘z yo‘q.")
         return
 
     random.shuffle(words)
 
-    quiz_state[message.chat.id] = {
+    quiz_state[user_id] = {
         "type": "new",
         "words": words,
         "index": 0,
         "correct": 0
     }
 
-    ask_question(message.chat.id)
-
+    ask_question(user_id)
 
 # ================= TAKRORLASH =================
 
 @bot.message_handler(func=lambda m: m.text == "🔁 Takrorlash")
 def repetition_info(message):
-
-    bot.send_message(message.chat.id,
-                     "Qutini tanlang:",
-                     reply_markup=box_menu())
-
+    bot.send_message(
+        message.chat.id,
+        "Qutini tanlang:",
+        reply_markup=box_menu(message.chat.id)
+    )
 
 @bot.message_handler(func=lambda m: m.text and "Quti" in m.text)
 def open_box(message):
-
+    user_id = message.chat.id
     match = re.search(r"Quti\s+(\d)", message.text)
+
     if not match:
         return
 
     box_number = int(match.group(1))
 
-    cur.execute("SELECT eng, uz FROM words WHERE box=%s", (box_number,))
+    cur.execute("""
+        SELECT eng, uz FROM words
+        WHERE user_id=%s AND box=%s
+    """, (user_id, box_number))
+
     words = cur.fetchall()
 
     if not words:
-        bot.send_message(message.chat.id, "Bu quti bo‘sh.", reply_markup=box_menu())
+        bot.send_message(
+            user_id,
+            "Bu quti bo‘sh.",
+            reply_markup=box_menu(user_id)
+        )
         return
 
-    quiz_state[message.chat.id] = {
+    quiz_state[user_id] = {
         "type": "box",
         "box": box_number,
         "words": words,
@@ -194,14 +203,13 @@ def open_box(message):
         "correct": 0
     }
 
-    ask_question(message.chat.id)
-
+    ask_question(user_id)
 
 # ================= SAVOL =================
 
 def ask_question(chat_id):
-
     quiz = quiz_state.get(chat_id)
+
     if not quiz:
         return
 
@@ -211,51 +219,59 @@ def ask_question(chat_id):
 
     eng, uz = quiz["words"][quiz["index"]]
 
-    question = f"({quiz['index']+1}/{len(quiz['words'])})\n🇺🇿 {uz.upper()} → ?"
-
     quiz["current_answer"] = eng
 
-    bot.send_message(chat_id, question, reply_markup=back_menu())
+    question = f"({quiz['index']+1}/{len(quiz['words'])})\n🇺🇿 {uz.upper()} → ?"
 
+    bot.send_message(chat_id, question, reply_markup=back_menu())
 
 # ================= JAVOB =================
 
 @bot.message_handler(func=lambda m: m.chat.id in quiz_state)
 def check_answer(message):
+    chat_id = message.chat.id
 
     if message.text == "🔙 Orqaga":
         return
 
-    chat_id = message.chat.id
     quiz = quiz_state[chat_id]
 
     user_answer = message.text.strip().lower()
     correct_answer = quiz["current_answer"]
 
-    eng, uz = quiz["words"][quiz["index"]]
+    eng, _ = quiz["words"][quiz["index"]]
 
     if user_answer == correct_answer:
         quiz["correct"] += 1
         bot.send_message(chat_id, "✅ To‘g‘ri!")
 
         if quiz["type"] == "new":
-            cur.execute("UPDATE words SET box=1 WHERE eng=%s", (eng,))
+            cur.execute("""
+                UPDATE words
+                SET box=1
+                WHERE user_id=%s AND eng=%s
+            """, (chat_id, eng))
         else:
             next_box = min(quiz["box"] + 1, 5)
-            cur.execute("UPDATE words SET box=%s WHERE eng=%s", (next_box, eng))
-
+            cur.execute("""
+                UPDATE words
+                SET box=%s
+                WHERE user_id=%s AND eng=%s
+            """, (next_box, chat_id, eng))
     else:
         bot.send_message(chat_id, f"❌ Xato! {correct_answer}")
-        cur.execute("UPDATE words SET box=1 WHERE eng=%s", (eng,))
+        cur.execute("""
+            UPDATE words
+            SET box=1
+            WHERE user_id=%s AND eng=%s
+        """, (chat_id, eng))
 
     quiz["index"] += 1
     ask_question(chat_id)
 
-
-# ================= STATISTIKA =================
+# ================= FINISH =================
 
 def finish_test(chat_id):
-
     quiz = quiz_state[chat_id]
 
     total = len(quiz["words"])
@@ -275,16 +291,18 @@ def finish_test(chat_id):
     bot.send_message(chat_id, text, reply_markup=main_menu())
     quiz_state.pop(chat_id, None)
 
-
 # ================= CLEAR =================
 
 @bot.message_handler(func=lambda m: m.text == "❌ Tozalash")
 def clear_all(message):
-    cur.execute("DELETE FROM words")
-    bot.send_message(message.chat.id,
-                     "Hammasi tozalandi.",
-                     reply_markup=main_menu())
+    cur.execute("DELETE FROM words WHERE user_id=%s", (message.chat.id,))
+    bot.send_message(
+        message.chat.id,
+        "Sizning so‘zlaringiz tozalandi.",
+        reply_markup=main_menu()
+    )
 
+# ================= RUN =================
 
 print("Bot Railway + Postgres bilan ishlayapti...")
 bot.infinity_polling(skip_pending=True)
