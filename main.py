@@ -77,9 +77,33 @@ def start(message):
     text = """
 📚 MNEMONIKA WORD BOT
 
-Bu bot Leitner tizimi orqali so‘zlarni uzoq muddatli xotiraga joylaydi.
+Bu bot so‘zlarni oddiy yodlash emas,
+balki 🧠 Leitner (qutilar) tizimi orqali uzoq muddatli xotiraga joylash uchun mo‘ljallangan.
+
+🔹 Qanday ishlaydi?
+
+1️⃣ ➕ So‘z qo‘shish  
+   English=Uzbek formatda yangi so‘zlar qo‘shasiz.
+
+2️⃣ 📝 Test (Yangi)  
+   Yangi so‘zlar birinchi marta test qilinadi.  
+   To‘g‘ri javob → 📦 Quti 1 ga tushadi.
+
+3️⃣ 🔁 Takrorlash  
+   Qutilar orqali takrorlash boshlanadi:
+
+   📦 Quti 1 → 1 kun
+   📦 Quti 2 → 3 kun
+   📦 Quti 3 → 7 kun
+   📦 Quti 4 → 14 kun
+   📦 Quti 5 → 30 kun
+
+✅ To‘g‘ri javob → keyingi qutiga o‘tadi  
+❌ Xato javob → Quti 1 ga qaytadi  
 
 🎯 Maqsad — so‘zni Quti 5 gacha yetkazish.
+
+📊 Har testdan keyin natija va statistika ko‘rsatiladi.
 
 Boshlash uchun tugmalardan birini tanlang 👇
 """
