@@ -135,6 +135,11 @@ def process_words(message):
     count = 0
 
     for line in message.text.split("\n"):
+        line = line.strip()
+
+        # har xil tire belgilarini bir xil qilamiz
+        line = line.replace("–", "-").replace("—", "-")
+
         if "=" in line:
             eng, uz = line.split("=", 1)
         elif "-" in line:
@@ -156,10 +161,11 @@ def process_words(message):
 
     user_state.pop(message.chat.id, None)
 
-    bot.send_message(message.chat.id,
-                     f"✅ {count} ta so‘z saqlandi!",
-                     reply_markup=main_menu())
-
+    bot.send_message(
+        message.chat.id,
+        f"✅ {count} ta so‘z saqlandi!",
+        reply_markup=main_menu()
+    )
 
 # ================= TEST NEW =================
 
