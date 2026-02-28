@@ -1,0 +1,789 @@
+{
+    "new_words": {
+        "speak": {
+            "uz": "gapirmoq"
+        },
+        "listen to": {
+            "uz": "tinglamoq"
+        },
+        "write": {
+            "uz": "yozmoq"
+        },
+        "read": {
+            "uz": "o‘qimoq"
+        },
+        "try": {
+            "uz": "harakat qilmoq"
+        },
+        "use": {
+            "uz": "foydalanmoq"
+        },
+        "visit": {
+            "uz": "tashrif buyurmoq"
+        },
+        "meet": {
+            "uz": "uchrashmoq"
+        },
+        "greet": {
+            "uz": "salomlashmoq"
+        },
+        "introduce": {
+            "uz": "tanishtirmoq"
+        },
+        "talk": {
+            "uz": "suhbatlashmoq"
+        },
+        "find": {
+            "uz": "topmoq"
+        },
+        "sell": {
+            "uz": "sotmoq"
+        },
+        "produce": {
+            "uz": "ishlab chiqarmoq"
+        },
+        "carry": {
+            "uz": "ko‘tarib yurmoq"
+        },
+        "take": {
+            "uz": "olmoq"
+        },
+        "give": {
+            "uz": "bermoq"
+        },
+        "bring": {
+            "uz": "olib kelmoq"
+        },
+        "drink": {
+            "uz": "ichmoq"
+        },
+        "eat": {
+            "uz": "yemoq"
+        },
+        "consume": {
+            "uz": "iste’mol qilmoq"
+        },
+        "walk": {
+            "uz": "piyoda sayr qilmoq"
+        },
+        "run": {
+            "uz": "yugurmoq"
+        },
+        "climb": {
+            "uz": "tirmashib chiqmoq"
+        },
+        "stand": {
+            "uz": "turmoq"
+        },
+        "sit": {
+            "uz": "o‘tirmoq"
+        },
+        "open": {
+            "uz": "ochmoq"
+        },
+        "close": {
+            "uz": "yopmoq"
+        },
+        "start": {
+            "uz": "boshlamoq"
+        },
+        "finish": {
+            "uz": "tugatmoq"
+        },
+        "learn": {
+            "uz": "o‘rganmoq"
+        },
+        "teach": {
+            "uz": "o‘qitmoq"
+        },
+        "ask": {
+            "uz": "so‘ramoq"
+        },
+        "answer": {
+            "uz": "javob bermoq"
+        },
+        "choose": {
+            "uz": "tanlamoq"
+        },
+        "help": {
+            "uz": "yordam bermoq"
+        },
+        "study": {
+            "uz": "o‘qimoq"
+        },
+        "work": {
+            "uz": "ishlamoq"
+        },
+        "enter": {
+            "uz": "kirmoq"
+        },
+        "exit": {
+            "uz": "chiqmoq"
+        },
+        "travel": {
+            "uz": "sayohat qilmoq"
+        },
+        "drive": {
+            "uz": "haydamoq"
+        },
+        "ride": {
+            "uz": "minmoq (ot, velosiped, motosikl)"
+        },
+        "send": {
+            "uz": "jo‘natmoq"
+        },
+        "receive": {
+            "uz": "qabul qilmoq"
+        },
+        "build": {
+            "uz": "qurmoq"
+        },
+        "destroy": {
+            "uz": "buzmoq"
+        },
+        "plan": {
+            "uz": "rejalashtirmoq"
+        },
+        "break": {
+            "uz": "sindirmoq"
+        },
+        "fix": {
+            "uz": "tuzatmoq"
+        },
+        "repair": {
+            "uz": "ta’mirlamoq"
+        },
+        "push": {
+            "uz": "itarmoq"
+        },
+        "pull": {
+            "uz": "tortmoq"
+        },
+        "throw": {
+            "uz": "uloqtirmoq"
+        },
+        "catch": {
+            "uz": "tutmoq"
+        },
+        "touch": {
+            "uz": "tegmoq"
+        },
+        "press": {
+            "uz": "bosmoq"
+        },
+        "hit": {
+            "uz": "urmoq"
+        },
+        "kick": {
+            "uz": "tepmoq"
+        },
+        "add": {
+            "uz": "qo‘shmoq"
+        },
+        "share": {
+            "uz": "ulashmoq"
+        },
+        "collect": {
+            "uz": "to‘plamoq"
+        },
+        "deliver": {
+            "uz": "yetkazib bermoq"
+        },
+        "do": {
+            "uz": "bajarmoq"
+        },
+        "make": {
+            "uz": "yasamoq"
+        },
+        "draw": {
+            "uz": "chizmoq"
+        },
+        "paint": {
+            "uz": "bo‘yamoq"
+        },
+        "control": {
+            "uz": "nazorat qilmoq"
+        },
+        "pay": {
+            "uz": "to‘lamoq"
+        },
+        "borrow": {
+            "uz": "qarz olmoq"
+        },
+        "lend": {
+            "uz": "qarz bermoq"
+        },
+        "waste": {
+            "uz": "isrof qilmoq"
+        },
+        "confirm": {
+            "uz": "tasdiqlamoq"
+        },
+        "accept": {
+            "uz": "qabul qilmoq"
+        },
+        "refuse": {
+            "uz": "rad etmoq"
+        },
+        "reject": {
+            "uz": "rad etmoq"
+        },
+        "show": {
+            "uz": "ko‘rsatmoq"
+        },
+        "hide": {
+            "uz": "yashirmoq"
+        },
+        "keep": {
+            "uz": "saqlamoq"
+        },
+        "suggest": {
+            "uz": "taklif qilmoq"
+        },
+        "recommend": {
+            "uz": "tavsiya qilmoq"
+        },
+        "invite": {
+            "uz": "taklif qilmoq"
+        },
+        "arrive": {
+            "uz": "yetib kelmoq"
+        },
+        "depart": {
+            "uz": "jo‘namoq"
+        },
+        "come": {
+            "uz": "kelmoq"
+        },
+        "return": {
+            "uz": "qaytmoq"
+        },
+        "play": {
+            "uz": "o‘ynamoq"
+        },
+        "swim": {
+            "uz": "suzmoq"
+        },
+        "watch": {
+            "uz": "tomosha qilmoq"
+        },
+        "download": {
+            "uz": "yuklab olmoq"
+        },
+        "upload": {
+            "uz": "yuklamoq"
+        },
+        "edit": {
+            "uz": "tahrirlamoq"
+        },
+        "copy": {
+            "uz": "ko‘chirmoq"
+        },
+        "print": {
+            "uz": "bosmadan chiqarmoq"
+        },
+        "scan": {
+            "uz": "skanerlash"
+        },
+        "block": {
+            "uz": "bloklamoq"
+        },
+        "chat": {
+            "uz": "suhbatlashmoq"
+        },
+        "believe": {
+            "uz": "ishonmoq"
+        },
+        "disagree": {
+            "uz": "fikrga qo‘shilmaslik"
+        },
+        "think": {
+            "uz": "o‘ylamoq"
+        },
+        "have": {
+            "uz": "bor bo‘lmoq"
+        },
+        "know": {
+            "uz": "bilmoq"
+        },
+        "forget": {
+            "uz": "unutmoq"
+        },
+        "remember": {
+            "uz": "eslamoq"
+        },
+        "doubt": {
+            "uz": "shubhalanmoq"
+        },
+        "imagine": {
+            "uz": "tasavvur qilmoq"
+        },
+        "recognise": {
+            "uz": "tanimoq"
+        },
+        "understand": {
+            "uz": "tushunmoq"
+        },
+        "deny": {
+            "uz": "rad etmoq"
+        },
+        "realise": {
+            "uz": "anglab yetmoq"
+        },
+        "concern": {
+            "uz": "tashvishlanmoq"
+        },
+        "like": {
+            "uz": "yoqtirmoq"
+        },
+        "love": {
+            "uz": "yoqtirmoq"
+        },
+        "hate": {
+            "uz": "nafratlanmoq"
+        },
+        "dislike": {
+            "uz": "yoqtirmaslik"
+        },
+        "prefer": {
+            "uz": "afzal ko‘rmoq"
+        },
+        "want": {
+            "uz": "xohlamoq"
+        },
+        "appreciate": {
+            "uz": "qadrlamoq"
+        },
+        "wish": {
+            "uz": "istamoq"
+        },
+        "hope": {
+            "uz": "umid qilmoq"
+        },
+        "desire": {
+            "uz": "xohlamoq"
+        },
+        "value": {
+            "uz": "qadrlamoq"
+        },
+        "consist": {
+            "uz": "…dan iborat bo‘lmoq"
+        },
+        "contain": {
+            "uz": "o‘z ichiga olmoq"
+        },
+        "depend": {
+            "uz": "bog‘liq bo‘lmoq"
+        },
+        "fit": {
+            "uz": "mos kelmoq"
+        },
+        "suit": {
+            "uz": "mos kelmoq"
+        },
+        "match": {
+            "uz": "mos kelmoq"
+        },
+        "suspect": {
+            "uz": "shubhalanmoq"
+        },
+        "deserve": {
+            "uz": "arzimoq"
+        },
+        "satisfy": {
+            "uz": "qoniqmoq"
+        },
+        "seem": {
+            "uz": "tuyulmoq"
+        },
+        "expect": {
+            "uz": "kutmoq"
+        },
+        "mean": {
+            "uz": "nazarda tutmoq"
+        },
+        "assume": {
+            "uz": "taxmin qilmoq"
+        },
+        "adore": {
+            "uz": "havas qilmoq"
+        },
+        "fear": {
+            "uz": "qo‘rqmoq"
+        },
+        "worry": {
+            "uz": "tashvishlanmoq"
+        },
+        "trust": {
+            "uz": "ishonmoq"
+        },
+        "resemble": {
+            "uz": "o‘xshamoq"
+        },
+        "appear": {
+            "uz": "ko‘rinmoq"
+        },
+        "see": {
+            "uz": "ko‘rmoq"
+        },
+        "taste": {
+            "uz": "ta’m bermoq"
+        },
+        "smell": {
+            "uz": "hid bermoq"
+        },
+        "look": {
+            "uz": "ko‘rinmoq"
+        },
+        "possess": {
+            "uz": "egalik qilmoq"
+        },
+        "involve": {
+            "uz": "taqozo qilmoq"
+        },
+        "own": {
+            "uz": "egalik qilmoq"
+        },
+        "exist": {
+            "uz": "mavjud bo‘lmoq"
+        },
+        "require": {
+            "uz": "talab qilmoq"
+        },
+        "demand": {
+            "uz": "talab qilmoq"
+        },
+        "equal": {
+            "uz": "teng bo‘lmoq"
+        },
+        "differ": {
+            "uz": "farq qilmoq"
+        },
+        "confuse": {
+            "uz": "chalkashtirmoq"
+        },
+        "bother": {
+            "uz": "bezovta qilmoq"
+        },
+        "allow": {
+            "uz": "ruxsat bermoq"
+        },
+        "regret": {
+            "uz": "afsuslanmoq"
+        },
+        "tolerate": {
+            "uz": "chidamoq"
+        },
+        "guess": {
+            "uz": "taxmin qilmoq"
+        },
+        "notice": {
+            "uz": "payqamoq"
+        },
+        "apologize": {
+            "uz": "kechirim so‘ramoq"
+        },
+        "guarantee": {
+            "uz": "kafolatlamoq"
+        },
+        "admire": {
+            "uz": "havas qilmoq"
+        },
+        "argue": {
+            "uz": "bahslashmoq"
+        },
+        "comprehend": {
+            "uz": "tushunmoq"
+        },
+        "fancy": {
+            "uz": "xohlamoq"
+        },
+        "ignore": {
+            "uz": "e’tibor bermaslik"
+        },
+        "neglect": {
+            "uz": "e’tiborsiz qoldirmoq"
+        },
+        "intend": {
+            "uz": "niyat qilmoq"
+        },
+        "lack": {
+            "uz": "yetishmaslik"
+        },
+        "predict": {
+            "uz": "bashorat qilmoq"
+        },
+        "liquid": {
+            "uz": "suyuqlik"
+        },
+        "oil": {
+            "uz": "yog'/neft"
+        },
+        "milk": {
+            "uz": "sut"
+        },
+        "beverage/ drink": {
+            "uz": "ichimlik"
+        },
+        "drinkable": {
+            "uz": "ichsa bo'ladigan"
+        },
+        "wine": {
+            "uz": "vino"
+        },
+        "bottled water": {
+            "uz": "idishga solingan suv"
+        },
+        "petrol": {
+            "uz": "benzin"
+        },
+        "cocktail": {
+            "uz": "kokteyl"
+        },
+        "soda": {
+            "uz": "gazlangan ichimlik"
+        },
+        "lemonade": {
+            "uz": "limonad"
+        },
+        "tap water": {
+            "uz": "jo'mrak suvi"
+        },
+        "blood": {
+            "uz": "qon"
+        },
+        "honey": {
+            "uz": "asal"
+        },
+        "ink": {
+            "uz": "siyoh"
+        },
+        "vinegar": {
+            "uz": "sirka"
+        },
+        "perfume": {
+            "uz": "atir"
+        },
+        "alcohol": {
+            "uz": "alkogol"
+        },
+        "coffee": {
+            "uz": "kofe"
+        },
+        "tea": {
+            "uz": "choy"
+        },
+        "soup": {
+            "uz": "sho'rva"
+        },
+        "vehicle": {
+            "uz": "transport vositasi"
+        },
+        "bus": {
+            "uz": "avtobus"
+        },
+        "taxi/cab": {
+            "uz": "taksi"
+        },
+        "train": {
+            "uz": "poyezd"
+        },
+        "subway/underground/metro": {
+            "uz": "metro"
+        },
+        "tram": {
+            "uz": "tramvay"
+        },
+        "bicycle/bike": {
+            "uz": "velosiped"
+        },
+        "motorbike": {
+            "uz": "motosikl"
+        },
+        "plane/airplane": {
+            "uz": "samolyot"
+        },
+        "truck/lorry": {
+            "uz": "yuk mashinasi"
+        },
+        "jet ski": {
+            "uz": "suv motosikli"
+        },
+        "scooter": {
+            "uz": "skuter"
+        },
+        "boat/sail/ferry": {
+            "uz": "qayiq"
+        },
+        "ship/cruise": {
+            "uz": "kema"
+        },
+        "passenger": {
+            "uz": "yo‘lovchi"
+        },
+        "parking/parking lot": {
+            "uz": "mashina to‘xtash joyi"
+        },
+        "fare": {
+            "uz": "yo‘l kira"
+        },
+        "traffic jam/traffic congestion": {
+            "uz": "tirbandlik"
+        },
+        "accident": {
+            "uz": "avariya"
+        },
+        "public transport": {
+            "uz": "jamoat transporti"
+        },
+        "private transport": {
+            "uz": "shaxsiy transport"
+        },
+        "road sign": {
+            "uz": "yo‘l belgisi"
+        },
+        "driving licence": {
+            "uz": "haydovchilik guvohnomasi"
+        },
+        "insurance": {
+            "uz": "sug‘urta"
+        },
+        "seat belt": {
+            "uz": "kamar"
+        }
+    },
+    "boxes": {
+        "1": {
+            "check": {
+                "uz": "tekshirmoq"
+            },
+            "call": {
+                "uz": "chaqirmoq / telefon qilmoq"
+            },
+            "follow": {
+                "uz": "ergashmoq"
+            },
+            "go": {
+                "uz": "bormoq"
+            },
+            "wait": {
+                "uz": "kutmoq"
+            },
+            "cook": {
+                "uz": "pishirmoq"
+            },
+            "envy": {
+                "uz": "hasad qilmoq"
+            },
+            "beer": {
+                "uz": "pivo"
+            },
+            "include": {
+                "uz": "o‘z ichiga olmoq"
+            },
+            "feel": {
+                "uz": "his qilmoq"
+            },
+            "transport": {
+                "uz": "transport"
+            },
+            "count": {
+                "uz": "sanamoq"
+            },
+            "join": {
+                "uz": "qo‘shilmoq"
+            },
+            "coke": {
+                "uz": "kola"
+            },
+            "enjoy": {
+                "uz": "rohatlanmoq"
+            },
+            "consider": {
+                "uz": "deb hisoblamoq"
+            },
+            "respect": {
+                "uz": "hurmat qilmoq"
+            },
+            "pedestrian": {
+                "uz": "piyoda"
+            },
+            "fizzy drink": {
+                "uz": "gazli ichimlik"
+            },
+            "sound": {
+                "uz": "eshitilmoq"
+            },
+            "agree": {
+                "uz": "fikrga qo‘shilmoq"
+            },
+            "sauce": {
+                "uz": "sous"
+            },
+            "cancel": {
+                "uz": "bekor qilmoq"
+            },
+            "belong": {
+                "uz": "tegishli bo‘lmoq"
+            },
+            "begin": {
+                "uz": "boshlamoq"
+            },
+            "car": {
+                "uz": "mashina"
+            },
+            "promise": {
+                "uz": "va’da bermoq"
+            },
+            "syrup": {
+                "uz": "sirop"
+            },
+            "stop": {
+                "uz": "to‘xtamoq"
+            },
+            "fuel": {
+                "uz": "yoqilg'i"
+            },
+            "traffic light": {
+                "uz": "svetafor"
+            },
+            "prepare": {
+                "uz": "tayyorlanmoq"
+            },
+            "dance": {
+                "uz": "raqsga tushmoq"
+            },
+            "reply": {
+                "uz": "javob qaytarmoq"
+            },
+            "leave": {
+                "uz": "tark etmoq"
+            },
+            "live": {
+                "uz": "yashamoq"
+            },
+            "buy": {
+                "uz": "sotib olmoq"
+            },
+            "forgive": {
+                "uz": "kechirmoq"
+            },
+            "juice": {
+                "uz": "sharbat"
+            },
+            "spend": {
+                "uz": "sarflamoq"
+            },
+            "jump": {
+                "uz": "sakramoq"
+            },
+            "shampoo": {
+                "uz": "shampun"
+            }
+        },
+        "2": {},
+        "3": {},
+        "4": {},
+        "5": {}
+    }
+}
