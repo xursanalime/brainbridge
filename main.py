@@ -4,9 +4,7 @@ import random
 import psycopg2
 import re
 from datetime import datetime, timedelta
-from dotenv import load_dotenv
 
-load_dotenv()
 
 TOKEN = os.getenv("BOT_TOKEN")
 DATABASE_URL = os.getenv("DATABASE_URL")
