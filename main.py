@@ -217,7 +217,8 @@ def handle_ans(msg):
         if row:
             cb=row[0]; nb=min(cb+1,5)
             db("UPDATE words SET box=%s,next_review=%s WHERE user_id=%s AND uz=%s",(nb,nxt(nb),uid,uz))
-            bot.send_message(uid,f"{'🏆 *Ajoyib!* Quti 5!' if nb==5 else f'✅ *To\\'g\\'ri!*  📦 Quti {cb} → {nb}'}",parse_mode="Markdown")
+            msg_text = "🏆 *Ajoyib!* Quti 5!" if nb==5 else f"✅ *To'g'ri!*  📦 Quti {cb} → {nb}"
+            bot.send_message(uid, msg_text, parse_mode="Markdown")
     else:
         quiz["wrong"].append((uz,eng))
         db("UPDATE words SET box=1,next_review=%s WHERE user_id=%s AND uz=%s",(nxt(1),uid,uz))
