@@ -36,6 +36,12 @@ db("""CREATE TABLE IF NOT EXISTS words(
     next_review TIMESTAMP DEFAULT NOW(),
     created_at  TIMESTAMP DEFAULT NOW(),
     UNIQUE(user_id, uz))""")
+try:
+    db("ALTER TABLE words ADD COLUMN IF NOT EXISTS next_review TIMESTAMP DEFAULT NOW()")
+    db("ALTER TABLE words ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()")
+except Exception as e:
+    log.warning(f"ALTER TABLE xato (ehtimol allaqachon mavjud): {e}")
+
 db("CREATE INDEX IF NOT EXISTS idx_u ON words(user_id)")
 db("CREATE INDEX IF NOT EXISTS idx_r ON words(user_id,box,next_review)")
 
