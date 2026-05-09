@@ -227,43 +227,114 @@ def ask_q(uid):
     quiz = quiz_state.get(uid)
     if not quiz: return
     if quiz["index"] >= len(quiz["words"]): finish(uid); return
+    
     wid, uz, eng = quiz["words"][quiz["index"]]
-    answers = [x.strip() for x in eng.split(",")]
-    quiz["answers"] = answers; quiz["used"] = []
+    
+    # 1. To'g'ri javob
+    correct_ans = eng.split(",")[0].strip() # Birinchi sinonimni olamiz
+    
+    # 2. Barcha so'zlar ro'yxatidan tasodifiy 3 ta noto'g'ri javobni tanlash
+    all_words = storage.get_all_words(uid)
+    wrong_answers = []
+    
+    # Faqat inglizcha so'zlarni to'playmiz, to'g'ri javoblarni chiqaramiz
+    eng_answers = [w["eng"].split(",")[0].strip() for w in all_words]
+    correct_synonyms = [s.strip().lower() for s in eng.split(",")]
+    
+    available_wrong = [a for a in eng_answers if a.lower() not in correct_synonyms]
+    
+    # Agar lug'atda yetarli so'z bo'lmasa, sun'iy noto'g'ri javoblar qo'shamiz (fallback)
+    if len(available_wrong) < 3:
+        fallbacks = ["apple", "book", "car", "house", "computer", "water", "friend", "money", "time", "day"]
+        for f in fallbacks:
+            if f.lower() not in correct_synonyms and f not in available_wrong:
+                available_wrong.append(f)
+                
+    # 3 tasini tasodifiy tanlab olamiz
+    random.shuffle(available_wrong)
+    wrong_answers = available_wrong[:3]
+    
+    # 3. To'g'ri va noto'g'ri javoblarni birlashtiramiz va aralashtiramiz
+    options = wrong_answers + [correct_ans]
+    random.shuffle(options)
+    
+    # To'g'ri javob indeksini topamiz
+    correct_idx = options.index(correct_ans)
+    
+    # State ga saqlaymiz
+    quiz["options"] = options
+    quiz["correct_idx"] = correct_idx
+    
     total = len(quiz["words"]); cur_i = quiz["index"] + 1
     pct = int(quiz["index"]/total*100)
+    
+    # Progress matni
     text = (f"*{cur_i}/{total}* `[{bar(quiz['index'],total)}]` {pct}%\n"
             f"━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"🇺🇿 *{uz.upper()}*\n\n🇬🇧 Inglizcha tarjimasini yozing:")
-    if len(answers) > 1: text += f"\n\n💡 _{len(answers)} ta to'g'ri javob bor_"
-    bot.send_message(uid, text, parse_mode="Markdown", reply_markup=back_menu())
+            f"🇺🇿 Tarjima qiling: *{uz.upper()}*")
+            
+    # Variantlarni klaviatura (inline button) orqali ko'rsatamiz
+    kb = telebot.types.InlineKeyboardMarkup(row_width=1)
+    
+    for i, opt in enumerate(options):
+        # Tugma callback data sifatida indeksi (0,1,2,3) saqlanadi
+        btn = telebot.types.InlineKeyboardButton(f"{opt}", callback_data=f"quiz_{i}")
+        kb.add(btn)
+        
+    bot.send_message(uid, text, parse_mode="Markdown", reply_markup=kb)
 
-@bot.message_handler(func=lambda m: m.chat.id in quiz_state)
-def handle_ans(msg):
-    uid = msg.chat.id; quiz = quiz_state.get(uid)
-    if not quiz or msg.text == "🔙 Orqaga": return
-    answer = msg.text.strip().lower()
+@bot.callback_query_handler(func=lambda c: c.data.startswith("quiz_"))
+def cb_quiz_ans(call):
+    uid = call.message.chat.id
+    quiz = quiz_state.get(uid)
+    if not quiz:
+        bot.answer_callback_query(call.id, "⚠️ Test yakunlangan yoki bekor qilingan.")
+        return
+
+    # Call datadan javob indeksini olish ("quiz_0", "quiz_1", va hokazo)
+    parts = call.data.split("_")
+    if len(parts) < 2: return
+    selected_idx = int(parts[1])
+
     wid, uz, eng = quiz["words"][quiz["index"]]
-    answers = quiz["answers"]
-    if answer in answers and answer not in quiz["used"]:
-        quiz["used"].append(answer)
-        rem = [a for a in answers if a not in quiz["used"]]
-        if rem:
-            bot.send_message(uid, f"✅ *To'g'ri!* Yana *{len(rem)} ta* sinonim qoldi...", parse_mode="Markdown"); return
+    correct_idx = quiz.get("correct_idx", -1)
+
+    # Foydalanuvchi to'g'ri yoki noto'g'ri ekanligini tekshirish
+    is_correct = (selected_idx == correct_idx)
+
+    bot.answer_callback_query(call.id)
+    
+    # Xabarni o'zgartirib tugmalarni olib tashlash
+    bot.edit_message_reply_markup(chat_id=uid, message_id=call.message.message_id, reply_markup=None)
+
+    if is_correct:
         quiz["correct"] += 1
         w = storage.get_word_by_id(uid, wid)
         if w:
-            old_box = w["box"]; new_box = min(old_box + 1, 5)
+            old_box = w["box"]
+            new_box = min(old_box + 1, 5)
             storage.update_box(uid, wid, new_box)
-            txt = "🏆 *Ajoyib! So'z yakunlandi!* Quti 5 ga yetdi!" if new_box == 5 else f"✅ *To'g'ri!*\n📦 Quti {old_box} → {new_box}"
+            txt = f"✅ *To'g'ri!*\n\n🇺🇿 {uz.upper()} → 🇬🇧 {eng}\n\n🏆 *So'z yakunlandi!* Quti 5 ga yetdi!" if new_box == 5 else f"✅ *To'g'ri!*\n\n🇺🇿 {uz.upper()} → 🇬🇧 {eng}\n\n📦 Quti {old_box} → {new_box}"
             bot.send_message(uid, txt, parse_mode="Markdown")
     else:
         quiz["wrong"].append((uz, eng))
         storage.update_box(uid, wid, 1)
+        
+        # Foydalanuvchi tanlagan noto'g'ri javob matnini topish
+        selected_text = "Noma'lum"
+        if "options" in quiz and 0 <= selected_idx < len(quiz["options"]):
+            selected_text = quiz["options"][selected_idx]
+            
         bot.send_message(uid,
-            f"❌ *Xato!*\n\n✔️ To'g'ri javob: *{eng}*\n📦 → Quti 1 ga qaytarildi",
+            f"❌ *Xato!*\n\n"
+            f"Siz tanladingiz: _{selected_text}_\n"
+            f"✔️ To'g'ri javob: *{eng}*\n\n"
+            f"🇺🇿 {uz.upper()} → 🇬🇧 {eng}\n"
+            f"📦 → Quti 1 ga qaytarildi",
             parse_mode="Markdown")
-    quiz["index"] += 1; ask_q(uid)
+
+    quiz["index"] += 1
+    ask_q(uid)
 
 def finish(uid):
     quiz = quiz_state.pop(uid, None)
