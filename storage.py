@@ -193,3 +193,61 @@ def stats(uid: int) -> dict:
         "due":   sum(1 for w in all_w if w["box"] > 0 and _dt(w["next_review"]) <= now),
         "boxes": {i: sum(1 for w in all_w if w["box"] == i) for i in range(1, 6)},
     }
+
+# ── MIGRATION FROM POSTGRESQL ─────────────────────────────────────────────────
+def migrate_from_pg(database_url: str) -> int:
+    """
+    Startup'da chaqiriladi. Agar words.json bo'sh bo'lsa va DATABASE_URL mavjud bo'lsa,
+    PostgreSQL'dagi barcha so'zlarni JSON ga ko'chiradi.
+    Qaytadi: ko'chirilgan so'zlar soni (0 = kerak emas yoki xato).
+    """
+    # JSON allaqachon ma'lumot saqlagan bo'lsa — migratsiya kerak emas
+    with _lock:
+        existing = _load()
+        total_existing = sum(len(v.get("words", {})) for v in existing.values())
+    if total_existing > 0:
+        log.info(f"✅ JSON'da {total_existing} ta so'z mavjud — migratsiya kerak emas.")
+        return 0
+
+    try:
+        import psycopg2
+    except ImportError:
+        log.warning("⚠️ psycopg2 topilmadi — migratsiya o'tkazib yuborildi.")
+        return 0
+
+    try:
+        conn = psycopg2.connect(database_url)
+        cur  = conn.cursor()
+        cur.execute("SELECT user_id, uz, eng, box, next_review, created_at FROM words")
+        rows = cur.fetchall()
+        conn.close()
+    except Exception as e:
+        log.warning(f"⚠️ PostgreSQL ulanmadi, migratsiya o'tkazib yuborildi: {e}")
+        return 0
+
+    if not rows:
+        log.info("📭 PostgreSQL bo'sh — migratsiya kerak emas.")
+        return 0
+
+    count = 0
+    with _lock:
+        data = _load()
+        for uid, uz, eng, box, nr, ca in rows:
+            u = _user(data, uid)
+            # Takrorlanmaslik tekshiruvi
+            if any(w["uz"] == uz for w in u["words"].values()):
+                continue
+            wid = str(u["next_id"])
+            u["next_id"] += 1
+            u["words"][wid] = {
+                "uz":          uz,
+                "eng":         eng,
+                "box":         box or 0,
+                "next_review": (nr or datetime.now()).strftime("%Y-%m-%dT%H:%M:%S"),
+                "created_at":  (ca or datetime.now()).strftime("%Y-%m-%dT%H:%M:%S"),
+            }
+            count += 1
+        _save(data)
+
+    log.info(f"🎉 Migratsiya tugadi: {count} ta so'z PostgreSQL → JSON ga ko'chirildi.")
+    return count

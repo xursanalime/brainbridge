@@ -406,5 +406,15 @@ def handle_unknown(msg):
         bot.send_message(uid, "❓ Menyu tugmalaridan foydalaning.", reply_markup=main_menu())
 
 log.info("🚀 BrainBridge bot ishga tushdi...")
+
+# ── STARTUP MIGRATION: PostgreSQL → JSON (agar kerak bo'lsa) ──────────────────
+DATABASE_URL = os.getenv("DATABASE_URL")
+if DATABASE_URL:
+    migrated = storage.migrate_from_pg(DATABASE_URL)
+    if migrated > 0:
+        log.info(f"📦 {migrated} ta so'z muvaffaqiyatli ko'chirildi.")
+else:
+    log.info("ℹ️ DATABASE_URL yo'q — faqat JSON rejimida ishlamoqda.")
+
 backup.start_scheduler()
 bot.infinity_polling(skip_pending=True, timeout=30, long_polling_timeout=20)
