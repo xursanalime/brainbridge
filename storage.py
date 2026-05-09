@@ -1,253 +1,173 @@
-"""
-JSON-based storage layer — BrainBridge
-Ma'lumotlar words.json faylida saqlanadi.
-Format: { "user_id": { "next_id": int, "words": { "id": {...} } } }
-"""
-import json, os, threading, logging
+import os, logging, threading
 from datetime import datetime, timedelta
+import psycopg2
+from psycopg2 import pool
 
 log = logging.getLogger(__name__)
-DATA_FILE = os.path.join(os.path.dirname(__file__), "words.json")
-_lock = threading.RLock()
+DATABASE_URL = os.getenv("DATABASE_URL")
 BOX_DAYS = {0: 0, 1: 1, 2: 3, 3: 7, 4: 14, 5: 30}
 
-# ── IN-MEMORY CACHE ───────────────────────────────────────────────────────────
-_cache: dict | None = None
+# ── POSTGRESQL POOL ───────────────────────────────────────────────────────────
+if not DATABASE_URL:
+    log.warning("⚠️ DATABASE_URL o'rnatilmagan! DB ishlamaydi.")
+    _pool = None
+else:
+    try:
+        _pool = psycopg2.pool.ThreadedConnectionPool(1, 10, DATABASE_URL)
+        log.info("✅ PostgreSQL ulangan.")
+    except Exception as e:
+        log.error(f"❌ PostgreSQL ulanish xatosi: {e}")
+        _pool = None
 
-def _load() -> dict:
-    global _cache
-    if _cache is not None:
-        return _cache
-    if not os.path.exists(DATA_FILE):
-        _cache = {}
-        return _cache
-    with open(DATA_FILE, "r", encoding="utf-8") as f:
-        try:
-            _cache = json.load(f)
-        except json.JSONDecodeError:
-            _cache = {}
-    return _cache
+def _db(query: str, params=None, fetch=None, commit=True):
+    if not _pool: return None
+    conn = _pool.getconn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(query, params or ())
+            if commit: conn.commit()
+            if fetch == "one": return cur.fetchone()
+            if fetch == "all": return cur.fetchall()
+            return cur.rowcount
+    except Exception as e:
+        if commit: conn.rollback()
+        log.error(f"DB xato: {e}")
+        raise e
+    finally:
+        _pool.putconn(conn)
 
-def _save(data: dict):
-    global _cache
-    _cache = data
-    tmp = DATA_FILE + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-    os.replace(tmp, DATA_FILE)
+# ── INIT TABLES ───────────────────────────────────────────────────────────────
+def init_db():
+    if not _pool: return
+    _db("""CREATE TABLE IF NOT EXISTS words(
+        id SERIAL PRIMARY KEY,
+        user_id BIGINT NOT NULL,
+        uz TEXT NOT NULL,
+        eng TEXT NOT NULL,
+        box INTEGER DEFAULT 0,
+        next_review TIMESTAMP DEFAULT NOW(),
+        created_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(user_id, uz))""")
+    _db("CREATE INDEX IF NOT EXISTS idx_u ON words(user_id)")
+    _db("CREATE INDEX IF NOT EXISTS idx_r ON words(user_id, box, next_review)")
 
-def _user(data: dict, uid: int) -> dict:
-    key = str(uid)
-    if key not in data:
-        data[key] = {"next_id": 1, "words": {}}
-    return data[key]
+init_db()
 
 # ── HELPERS ───────────────────────────────────────────────────────────────────
-def _now_str() -> str:
-    return datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+def next_review_date(box: int) -> datetime:
+    return datetime.now() + timedelta(days=BOX_DAYS.get(box, 1))
 
-def _dt(s: str) -> datetime:
-    try:
-        return datetime.strptime(s, "%Y-%m-%dT%H:%M:%S")
-    except Exception:
-        return datetime.now()
-
-def next_review_date(box: int) -> str:
-    return (datetime.now() + timedelta(days=BOX_DAYS.get(box, 1))).strftime("%Y-%m-%dT%H:%M:%S")
+def _row_to_dict(row) -> dict:
+    return {
+        "id": row[0], "user_id": row[1], "uz": row[2], "eng": row[3],
+        "box": row[4], "next_review": row[5], "created_at": row[6]
+    }
 
 # ── CRUD ──────────────────────────────────────────────────────────────────────
 def get_all_words(uid: int) -> list:
-    """[{id, uz, eng, box, next_review, created_at}]"""
-    with _lock:
-        data = _load()
-        u = _user(data, uid)
-        return [{"id": int(k), **v} for k, v in u["words"].items()]
+    rows = _db("SELECT id, user_id, uz, eng, box, next_review, created_at FROM words WHERE user_id=%s ORDER BY created_at DESC", (uid,), fetch="all")
+    if not rows: return []
+    return [_row_to_dict(r) for r in rows]
 
 def get_word_by_id(uid: int, word_id: int) -> dict | None:
-    with _lock:
-        data = _load()
-        w = data.get(str(uid), {}).get("words", {}).get(str(word_id))
-        if w:
-            return {"id": word_id, **w}
-        return None
+    r = _db("SELECT id, user_id, uz, eng, box, next_review, created_at FROM words WHERE user_id=%s AND id=%s", (uid, word_id), fetch="one")
+    return _row_to_dict(r) if r else None
 
 def add_word(uid: int, uz: str, eng: str) -> str:
     """'added' | 'updated' | 'skipped'"""
-    with _lock:
-        data = _load()
-        u = _user(data, uid)
-        for w in u["words"].values():
-            if w["uz"] == uz:
-                old_syns = [x.strip() for x in w["eng"].split(",")]
-                new_syns = [x.strip() for x in eng.split(",")]
-                merged = old_syns[:]
-                added_any = False
-                for s in new_syns:
-                    if s not in merged:
-                        merged.append(s)
-                        added_any = True
-                if added_any:
-                    w["eng"] = ", ".join(merged)
-                    w["box"] = 0
-                    w["next_review"] = _now_str()
-                    _save(data)
-                    return "updated"
-                return "skipped"
-        wid = str(u["next_id"])
-        u["next_id"] += 1
-        u["words"][wid] = {
-            "uz": uz, "eng": eng, "box": 0,
-            "next_review": _now_str(), "created_at": _now_str()
-        }
-        _save(data)
-        return "added"
+    row = _db("SELECT id, eng FROM words WHERE user_id=%s AND uz=%s", (uid, uz), fetch="one")
+    if row:
+        wid, old_eng = row
+        old_syns = [x.strip() for x in old_eng.split(",")]
+        new_syns = [x.strip() for x in eng.split(",")]
+        merged = old_syns[:]
+        added_any = False
+        for s in new_syns:
+            if s not in merged:
+                merged.append(s)
+                added_any = True
+        if added_any:
+            new_eng_str = ", ".join(merged)
+            _db("UPDATE words SET eng=%s, box=0, next_review=NOW() WHERE id=%s", (new_eng_str, wid))
+            return "updated"
+        return "skipped"
+    
+    _db("INSERT INTO words (user_id, uz, eng, box, next_review) VALUES (%s, %s, %s, 0, NOW())", (uid, uz, eng))
+    return "added"
 
 def update_word_eng(uid: int, word_id: int, new_eng: str):
-    """So'z tarjimasini yangilaydi, qutilar o'zgarmaydi."""
-    with _lock:
-        data = _load()
-        w = data.get(str(uid), {}).get("words", {}).get(str(word_id))
-        if w:
-            w["eng"] = new_eng
-            _save(data)
+    _db("UPDATE words SET eng=%s WHERE id=%s AND user_id=%s", (new_eng, word_id, uid))
 
 def delete_word(uid: int, word_id: int) -> str | None:
-    """O'chirilgan so'zning 'uz' ini qaytaradi."""
-    with _lock:
-        data = _load()
-        words = data.get(str(uid), {}).get("words", {})
-        w = words.pop(str(word_id), None)
-        if w:
-            _save(data)
-            return w["uz"]
-        return None
+    r = _db("SELECT uz FROM words WHERE id=%s AND user_id=%s", (word_id, uid), fetch="one")
+    if r:
+        _db("DELETE FROM words WHERE id=%s AND user_id=%s", (word_id, uid))
+        return r[0]
+    return None
 
 def delete_all(uid: int) -> int:
-    with _lock:
-        data = _load()
-        u = _user(data, uid)
-        count = len(u["words"])
-        u["words"] = {}
-        u["next_id"] = 1
-        _save(data)
-        return count
+    count = _db("DELETE FROM words WHERE user_id=%s", (uid,))
+    return count if count is not None else 0
 
 def update_box(uid: int, word_id: int, new_box: int):
-    """ID orqali qutini yangilaydi — O(1)."""
-    with _lock:
-        data = _load()
-        w = data.get(str(uid), {}).get("words", {}).get(str(word_id))
-        if w:
-            w["box"] = new_box
-            w["next_review"] = next_review_date(new_box)
-            _save(data)
+    nxt = next_review_date(new_box)
+    _db("UPDATE words SET box=%s, next_review=%s WHERE id=%s AND user_id=%s", (new_box, nxt, word_id, uid))
 
 # ── QUERY HELPERS ─────────────────────────────────────────────────────────────
 def words_new(uid: int) -> list:
-    return [w for w in get_all_words(uid) if w["box"] == 0]
+    rows = _db("SELECT id, user_id, uz, eng, box, next_review, created_at FROM words WHERE user_id=%s AND box=0", (uid,), fetch="all")
+    return [_row_to_dict(r) for r in rows] if rows else []
 
 def words_in_box(uid: int, box: int, due_only=True) -> list:
-    now = datetime.now()
-    result = []
-    for w in get_all_words(uid):
-        if w["box"] != box:
-            continue
-        if due_only and _dt(w["next_review"]) > now:
-            continue
-        result.append(w)
-    return result
+    if due_only:
+        rows = _db("SELECT id, user_id, uz, eng, box, next_review, created_at FROM words WHERE user_id=%s AND box=%s AND next_review <= NOW()", (uid, box), fetch="all")
+    else:
+        rows = _db("SELECT id, user_id, uz, eng, box, next_review, created_at FROM words WHERE user_id=%s AND box=%s", (uid, box), fetch="all")
+    return [_row_to_dict(r) for r in rows] if rows else []
 
 def words_due(uid: int) -> list:
-    now = datetime.now()
-    return [w for w in get_all_words(uid)
-            if w["box"] > 0 and _dt(w["next_review"]) <= now]
+    rows = _db("SELECT id, user_id, uz, eng, box, next_review, created_at FROM words WHERE user_id=%s AND box>0 AND next_review <= NOW()", (uid,), fetch="all")
+    return [_row_to_dict(r) for r in rows] if rows else []
 
 def count_box(uid: int, box: int) -> int:
-    return sum(1 for w in get_all_words(uid) if w["box"] == box)
+    r = _db("SELECT COUNT(*) FROM words WHERE user_id=%s AND box=%s", (uid, box), fetch="one")
+    return r[0] if r else 0
 
 def count_due_box(uid: int, box: int) -> int:
-    now = datetime.now()
-    return sum(1 for w in get_all_words(uid)
-               if w["box"] == box and _dt(w["next_review"]) <= now)
+    r = _db("SELECT COUNT(*) FROM words WHERE user_id=%s AND box=%s AND next_review <= NOW()", (uid, box), fetch="one")
+    return r[0] if r else 0
 
 def next_due_time(uid: int) -> datetime | None:
-    times = [_dt(w["next_review"]) for w in get_all_words(uid) if w["box"] > 0]
-    return min(times) if times else None
+    r = _db("SELECT MIN(next_review) FROM words WHERE user_id=%s AND box>0", (uid,), fetch="one")
+    return r[0] if r else None
 
 def next_due_time_box(uid: int, box: int) -> datetime | None:
-    times = [_dt(w["next_review"]) for w in get_all_words(uid) if w["box"] == box]
-    return min(times) if times else None
+    r = _db("SELECT MIN(next_review) FROM words WHERE user_id=%s AND box=%s", (uid, box), fetch="one")
+    return r[0] if r else None
 
 def search_words(uid: int, query: str) -> list:
-    q = query.lower()
-    return [w for w in get_all_words(uid)
-            if q in w["uz"].lower() or q in w["eng"].lower()]
+    q = f"%{query.lower()}%"
+    rows = _db("SELECT id, user_id, uz, eng, box, next_review, created_at FROM words WHERE user_id=%s AND (LOWER(uz) LIKE %s OR LOWER(eng) LIKE %s) ORDER BY uz LIMIT 20", (uid, q, q), fetch="all")
+    return [_row_to_dict(r) for r in rows] if rows else []
 
 def stats(uid: int) -> dict:
-    all_w = get_all_words(uid)
-    now = datetime.now()
+    total = _db("SELECT COUNT(*) FROM words WHERE user_id=%s", (uid,), fetch="one")[0]
+    new_w = _db("SELECT COUNT(*) FROM words WHERE user_id=%s AND box=0", (uid,), fetch="one")[0]
+    done = _db("SELECT COUNT(*) FROM words WHERE user_id=%s AND box=5", (uid,), fetch="one")[0]
+    due = _db("SELECT COUNT(*) FROM words WHERE user_id=%s AND box>0 AND next_review <= NOW()", (uid,), fetch="one")[0]
+    
+    boxes = {}
+    for i in range(1, 6):
+        boxes[i] = _db("SELECT COUNT(*) FROM words WHERE user_id=%s AND box=%s", (uid, i), fetch="one")[0]
+        
     return {
-        "total": len(all_w),
-        "new":   sum(1 for w in all_w if w["box"] == 0),
-        "done":  sum(1 for w in all_w if w["box"] == 5),
-        "due":   sum(1 for w in all_w if w["box"] > 0 and _dt(w["next_review"]) <= now),
-        "boxes": {i: sum(1 for w in all_w if w["box"] == i) for i in range(1, 6)},
+        "total": total,
+        "new": new_w,
+        "done": done,
+        "due": due,
+        "boxes": boxes,
     }
 
-# ── MIGRATION FROM POSTGRESQL ─────────────────────────────────────────────────
 def migrate_from_pg(database_url: str) -> int:
-    """
-    Startup'da chaqiriladi. Agar words.json bo'sh bo'lsa va DATABASE_URL mavjud bo'lsa,
-    PostgreSQL'dagi barcha so'zlarni JSON ga ko'chiradi.
-    Qaytadi: ko'chirilgan so'zlar soni (0 = kerak emas yoki xato).
-    """
-    # JSON allaqachon ma'lumot saqlagan bo'lsa — migratsiya kerak emas
-    with _lock:
-        existing = _load()
-        total_existing = sum(len(v.get("words", {})) for v in existing.values())
-    if total_existing > 0:
-        log.info(f"✅ JSON'da {total_existing} ta so'z mavjud — migratsiya kerak emas.")
-        return 0
-
-    try:
-        import psycopg2
-    except ImportError:
-        log.warning("⚠️ psycopg2 topilmadi — migratsiya o'tkazib yuborildi.")
-        return 0
-
-    try:
-        conn = psycopg2.connect(database_url)
-        cur  = conn.cursor()
-        cur.execute("SELECT user_id, uz, eng, box, next_review, created_at FROM words")
-        rows = cur.fetchall()
-        conn.close()
-    except Exception as e:
-        log.warning(f"⚠️ PostgreSQL ulanmadi, migratsiya o'tkazib yuborildi: {e}")
-        return 0
-
-    if not rows:
-        log.info("📭 PostgreSQL bo'sh — migratsiya kerak emas.")
-        return 0
-
-    count = 0
-    with _lock:
-        data = _load()
-        for uid, uz, eng, box, nr, ca in rows:
-            u = _user(data, uid)
-            # Takrorlanmaslik tekshiruvi
-            if any(w["uz"] == uz for w in u["words"].values()):
-                continue
-            wid = str(u["next_id"])
-            u["next_id"] += 1
-            u["words"][wid] = {
-                "uz":          uz,
-                "eng":         eng,
-                "box":         box or 0,
-                "next_review": (nr or datetime.now()).strftime("%Y-%m-%dT%H:%M:%S"),
-                "created_at":  (ca or datetime.now()).strftime("%Y-%m-%dT%H:%M:%S"),
-            }
-            count += 1
-        _save(data)
-
-    log.info(f"🎉 Migratsiya tugadi: {count} ta so'z PostgreSQL → JSON ga ko'chirildi.")
-    return count
+    # Artib PostgreSQL ga ulandik, JSON kerak emas. 
+    return 0
