@@ -20,9 +20,9 @@ quiz_state: dict = {}
 def main_menu():
     kb = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True)
     kb.row("➕ So'z qo'shish", "📝 Test (Yangi)")
-    kb.row("🔁 Takrorlash",    "📊 Statistika")
-    kb.row("🔍 Qidirish",      "📋 So'zlarim")
-    kb.row("❌ Tozalash")
+    kb.row("🔁 Takrorlash",    "📝 Barcha so'zlar")
+    kb.row("📊 Statistika",    "🔍 Qidirish")
+    kb.row("📋 So'zlarim",     "❌ Tozalash")
     return kb
 
 def back_menu():
@@ -152,6 +152,23 @@ def cmd_new_test(msg):
     quiz_state[uid] = {"words": [(w["id"], w["uz"], w["eng"]) for w in words],
                        "index": 0, "correct": 0, "wrong": [], "used": [], "answers": [], "mode": "new"}
     bot.send_message(uid, f"🎯 *Test Boshlandi!*\n\n📚 Jami: *{len(words)} ta* yangi so'z\n💪 Muvaffaqiyat!",
+        parse_mode="Markdown")
+    ask_q(uid)
+
+# ── TEST BARCHASI ─────────────────────────────────────────────────────────────
+@bot.message_handler(func=lambda m: m.text == "📝 Barcha so'zlar")
+def cmd_all_test(msg):
+    uid = msg.chat.id
+    words = storage.get_all_words(uid)
+    if not words:
+        bot.send_message(uid,
+            "📭 *So'zlar ro'yxati bo'sh!*\n\n"
+            "💡 *➕ So'z qo'shish* orqali yangi so'zlar qo'shing.",
+            parse_mode="Markdown", reply_markup=main_menu()); return
+    random.shuffle(words)
+    quiz_state[uid] = {"words": [(w["id"], w["uz"], w["eng"]) for w in words],
+                       "index": 0, "correct": 0, "wrong": [], "used": [], "answers": [], "mode": "all"}
+    bot.send_message(uid, f"🎯 *Barcha So'zlar Testi Boshlandi!*\n\n📚 Jami: *{len(words)} ta* so'z\n💪 Muvaffaqiyat!",
         parse_mode="Markdown")
     ask_q(uid)
 
