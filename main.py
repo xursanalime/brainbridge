@@ -1,5 +1,6 @@
-import telebot, os, random, re, logging
+import telebot, os, random, re, logging, threading
 from datetime import datetime
+from apscheduler.schedulers.background import BackgroundScheduler
 import storage, backup
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
@@ -492,6 +493,42 @@ def handle_unknown(msg):
     if not (uid in quiz_state or st == "adding" or st == "searching"
             or (isinstance(st, dict) and st.get("mode") == "editing")):
         bot.send_message(uid, "❓ Menyu tugmalaridan foydalaning.", reply_markup=main_menu())
+
+# ── ESLATMA (REMINDER) SCHEDULER ──────────────────────────────────────────────
+notified_users: set = set()  # Allaqachon xabar yuborilgan userlarni saqlash (takroriy xabar jo'natmaslik uchun)
+
+def send_reminders():
+    """Takrorlash vaqti yetgan so'zlari bor foydalanuvchilarga eslatma yuboradi."""
+    try:
+        users_due = storage.get_users_with_due_words()
+        for user_id, due_count in users_due:
+            if user_id in notified_users:
+                continue  # Bu sessiyada allaqachon xabar yuborilgan
+            try:
+                bot.send_message(user_id,
+                    f"🔔 *Eslatma!*\n\n"
+                    f"📚 Sizda *{due_count} ta* so'z takrorlashga tayyor!\n\n"
+                    f"🧠 Yodingizda saqlash uchun hozir *🔁 Takrorlash* tugmasini bosing.\n\n"
+                    f"💡 _Muntazam takrorlash — mustahkam xotira!_",
+                    parse_mode="Markdown", reply_markup=main_menu())
+                notified_users.add(user_id)
+                log.info(f"📨 Eslatma yuborildi: user={user_id}, due={due_count}")
+            except Exception as e:
+                log.warning(f"⚠️ Eslatma yuborib bo'lmadi (user={user_id}): {e}")
+    except Exception as e:
+        log.error(f"❌ Reminder xatosi: {e}")
+
+def clear_notified():
+    """Har 1 soatda notified_users ni tozalaydi — shunda yana eslatma yuboriladi."""
+    notified_users.clear()
+    log.info("🔄 Notified users tozalandi.")
+
+# Scheduler sozlash
+scheduler = BackgroundScheduler()
+scheduler.add_job(send_reminders, 'interval', minutes=5, id='reminder_job')
+scheduler.add_job(clear_notified, 'interval', hours=1, id='clear_notified_job')
+scheduler.start()
+log.info("⏰ Eslatma scheduler ishga tushdi (har 5 daqiqada tekshiradi).")
 
 log.info("🚀 BrainBridge bot ishga tushdi...")
 bot.infinity_polling(skip_pending=True, timeout=30, long_polling_timeout=20)

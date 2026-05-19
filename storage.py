@@ -168,6 +168,16 @@ def stats(uid: int) -> dict:
         "boxes": boxes,
     }
 
+def get_users_with_due_words() -> list:
+    """Takrorlash vaqti yetgan so'zlari bor barcha foydalanuvchilarni qaytaradi.
+    Har bir element: (user_id, due_count)"""
+    rows = _db(
+        "SELECT user_id, COUNT(*) FROM words WHERE box > 0 AND next_review <= NOW() GROUP BY user_id",
+        fetch="all"
+    )
+    return rows if rows else []
+
+
 def migrate_from_pg(database_url: str) -> int:
     # Artib PostgreSQL ga ulandik, JSON kerak emas. 
     return 0
