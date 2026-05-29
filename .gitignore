@@ -15,6 +15,7 @@ env/
 # Data files (backup, local only)
 words.json
 stats.json
+data.json
 
 # IDE
 .idea/

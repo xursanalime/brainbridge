@@ -1,6 +1,9 @@
 import telebot, os, random, re, logging
-from datetime import datetime
-import storage, backup
+from dotenv import load_dotenv
+
+load_dotenv()  # .env faylidagi muhit o'zgaruvchilarini yuklaydi (BOT_TOKEN, DATABASE_URL)
+
+import storage
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 log = logging.getLogger(__name__)
@@ -23,6 +26,7 @@ def main_menu():
     kb.row("🔁 Takrorlash",    "📝 Barcha so'zlar")
     kb.row("📊 Statistika",    "🔍 Qidirish")
     kb.row("📋 So'zlarim",     "❌ Tozalash")
+    kb.row("⚙️ Sozlamalar")
     return kb
 
 def back_menu():
@@ -44,9 +48,29 @@ def box_menu(uid):
     return kb
 
 # ── HELPERS ───────────────────────────────────────────────────────────────────
+def esc(text) -> str:
+    """Telegram 'Markdown' (legacy) maxsus belgilarini ekranlash.
+    Foydalanuvchi kiritgan matn (so'z, ism) xabarni buzmasligi uchun."""
+    if text is None:
+        return ""
+    return re.sub(r"([_*`\[])", r"\\\1", str(text))
+
 def bar(done, total, w=10):
     f = int((done/total)*w) if total else 0
     return "█"*f + "░"*(w-f)
+
+def fmt_wait(seconds) -> str:
+    """Qolgan vaqtni (soniya) o'qiladigan matnga aylantiradi: 'X kun Y soat' / 'Y soat Z daqiqa'."""
+    if seconds is None or seconds <= 0:
+        return "hozir"
+    total_min = int(seconds // 60)
+    days, rem = divmod(total_min, 1440)
+    hours, mins = divmod(rem, 60)
+    if days > 0:
+        return f"{days} kun {hours} soat"
+    if hours > 0:
+        return f"{hours} soat {mins} daqiqa"
+    return f"{mins} daqiqa"
 
 def send_word_cards(chat_id, words, header=""):
     if header:
@@ -58,7 +82,7 @@ def send_word_cards(chat_id, words, header=""):
             telebot.types.InlineKeyboardButton("🗑 O'chirish",  callback_data=f"del_{w['id']}")
         )
         bot.send_message(chat_id,
-            f"{BOX_ICON[min(w['box'],5)]} *{w['uz']}* → `{w['eng']}`",
+            f"{BOX_ICON[min(w['box'],5)]} *{esc(w['uz'])}* → `{esc(w['eng'])}`",
             parse_mode="Markdown", reply_markup=kb)
 
 def send_page(uid, chat_id, page=0):
@@ -80,10 +104,10 @@ def send_page(uid, chat_id, page=0):
 @bot.message_handler(commands=["start"])
 def cmd_start(msg):
     user_state.pop(msg.chat.id, None); quiz_state.pop(msg.chat.id, None)
+    storage.register_user(msg.chat.id, msg.from_user.first_name)
     bot.send_message(msg.chat.id,
-        f"👋 Salom, *{msg.from_user.first_name or 'Doʻstim'}*!\n\n"
-        "🧠 *BRAINBRIDGE — So'z Yodlash Boti*\n"
-        "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"👋 Salom, *{esc(msg.from_user.first_name or 'Doʻstim')}*!\n\n"
+        "🧠 *BRAINBRIDGE — So'z Yodlash Boti*\n\n"
         "📖 Ingliz so'zlarini *Leitner tizimi* orqali samarali yodlang!\n\n"
         "📦 *Takrorlash jadvali:*\n"
         "┣ 🆕 Yangi  → darhol\n"
@@ -102,13 +126,50 @@ def cmd_back(msg):
     quiz_state.pop(msg.chat.id, None); user_state.pop(msg.chat.id, None)
     bot.send_message(msg.chat.id, "🏠 *Bosh menyu*", parse_mode="Markdown", reply_markup=main_menu())
 
+# ── SOZLAMALAR / BILDIRISHNOMA ────────────────────────────────────────────────
+def settings_kb(uid):
+    on = storage.get_notify(uid)
+    kb = telebot.types.InlineKeyboardMarkup()
+    if on:
+        kb.add(telebot.types.InlineKeyboardButton("🔕 Bildirishnomani o'chirish", callback_data="notify_off"))
+    else:
+        kb.add(telebot.types.InlineKeyboardButton("🔔 Bildirishnomani yoqish", callback_data="notify_on"))
+    return kb
+
+def settings_text(uid):
+    on = storage.get_notify(uid)
+    holat = "🔔 *Yoqilgan*" if on else "🔕 *O'chirilgan*"
+    return (
+        "⚙️ *Sozlamalar*\n\n"
+        f"📢 Bildirishnoma: {holat}\n\n"
+        "💡 Bildirishnoma yoqilganda, takrorlash vaqti kelgan so'zlaringiz "
+        "haqida sizga avtomatik eslatma yuboriladi."
+    )
+
+@bot.message_handler(func=lambda m: m.text == "⚙️ Sozlamalar")
+def cmd_settings(msg):
+    uid = msg.chat.id
+    storage.register_user(uid, msg.from_user.first_name)
+    bot.send_message(uid, settings_text(uid), parse_mode="Markdown", reply_markup=settings_kb(uid))
+
+@bot.callback_query_handler(func=lambda c: c.data in ("notify_on", "notify_off"))
+def cb_notify(call):
+    uid = call.message.chat.id
+    enabled = (call.data == "notify_on")
+    storage.set_notify(uid, enabled)
+    bot.answer_callback_query(call.id, "🔔 Yoqildi!" if enabled else "🔕 O'chirildi!")
+    try:
+        bot.edit_message_text(settings_text(uid), uid, call.message.message_id,
+            parse_mode="Markdown", reply_markup=settings_kb(uid))
+    except Exception:
+        pass
+
 # ── SO'Z QO'SHISH ─────────────────────────────────────────────────────────────
 @bot.message_handler(func=lambda m: m.text == "➕ So'z qo'shish")
 def cmd_add(msg):
     user_state[msg.chat.id] = "adding"
     bot.send_message(msg.chat.id,
-        "✏️ *So'z Qo'shish*\n"
-        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        "✏️ *So'z Qo'shish*\n\n"
         "📌 *Format:* `o'zbek = ingliz`\n\n"
         "📝 *Ko'p so'z (har qatorga birdan):*\n"
         "```\nkitob = book\nuy = house\n```\n\n"
@@ -120,6 +181,7 @@ def cmd_add(msg):
 @bot.message_handler(func=lambda m: user_state.get(m.chat.id) == "adding")
 def handle_add(msg):
     uid = msg.chat.id; added = updated = skipped = 0
+    storage.register_user(uid, msg.from_user.first_name)
     for line in msg.text.strip().split("\n"):
         line = line.strip()
         if not line or "=" not in line: continue
@@ -168,7 +230,7 @@ def cmd_all_test(msg):
     random.shuffle(words)
     quiz_state[uid] = {"words": [(w["id"], w["uz"], w["eng"]) for w in words],
                        "index": 0, "correct": 0, "wrong": [], "used": [], "answers": [], "mode": "all"}
-    bot.send_message(uid, f"🎯 *Barcha So'zlar Testi Boshlandi!*\n\n📚 Jami: *{len(words)} ta* so'z\n💪 Muvaffaqiyat!",
+    bot.send_message(uid, f"✍️ *Barcha So'zlar — Yozma Mashq*\n\n📚 Jami: *{len(words)} ta* so'z\n📝 _O'zbekchasi beriladi — inglizchasini yozing. Sinonimlardan birortasi ham to'g'ri._\n💪 Muvaffaqiyat!",
         parse_mode="Markdown")
     ask_q(uid)
 
@@ -177,12 +239,10 @@ def cmd_all_test(msg):
 def cmd_rep(msg):
     uid = msg.chat.id
     if not storage.words_due(uid):
-        nxt_t = storage.next_due_time(uid)
-        if nxt_t:
-            diff = nxt_t - datetime.now()
-            h = int(diff.total_seconds()//3600); m = int((diff.total_seconds()%3600)//60)
+        secs = storage.seconds_until_due(uid)
+        if secs is not None:
             bot.send_message(uid,
-                f"⏳ *Hozircha tayyor so'z yo'q.*\n\n🕐 Keyingi takrorlash: *{h} soat {m} daqiqadan* so'ng",
+                f"⏳ *Hozircha tayyor so'z yo'q.*\n\n🕐 Keyingi takrorlash: *{fmt_wait(secs)}dan* so'ng",
                 parse_mode="Markdown", reply_markup=main_menu())
         else:
             bot.send_message(uid,
@@ -204,12 +264,10 @@ def cmd_box(msg):
     if not words:
         total = storage.count_box(uid, box)
         if total > 0:
-            nxt_t = storage.next_due_time_box(uid, box)
-            if nxt_t:
-                diff = nxt_t - datetime.now()
-                h = int(diff.total_seconds()//3600); m = int((diff.total_seconds()%3600)//60)
+            secs = storage.seconds_until_due_box(uid, box)
+            if secs is not None:
                 bot.send_message(uid,
-                    f"⏳ *Hali vaqt kelmagan.*\n\n🕐 Tayyor bo'ladi: *{h} soat {m} daqiqadan* so'ng",
+                    f"⏳ *Hali vaqt kelmagan.*\n\n🕐 Tayyor bo'ladi: *{fmt_wait(secs)}dan* so'ng",
                     parse_mode="Markdown", reply_markup=box_menu(uid))
         else:
             bot.send_message(uid, f"📭 *Quti {box}* da so'z yo'q.", parse_mode="Markdown", reply_markup=box_menu(uid))
@@ -223,32 +281,93 @@ def cmd_box(msg):
     ask_q(uid)
 
 # ── SAVOL / JAVOB ─────────────────────────────────────────────────────────────
+def ask_writing(uid):
+    """Yozma rejim savoli: o'zbekcha ko'rsatiladi, user inglizchasini yozadi."""
+    quiz = quiz_state.get(uid)
+    if not quiz: return
+    if quiz["index"] >= len(quiz["words"]): finish(uid); return
+
+    wid, uz, eng = quiz["words"][quiz["index"]]
+    total = len(quiz["words"]); cur_i = quiz["index"] + 1
+    pct = int(quiz["index"]/total*100)
+    text = (f"*{cur_i}/{total}*  `[{bar(quiz['index'],total)}]`  {pct}%\n\n"
+            f"🇺🇿 *{esc(uz.upper())}*\n\n"
+            f"✍️ Inglizcha tarjimasini yozing:")
+    bot.send_message(uid, text, parse_mode="Markdown", reply_markup=back_menu())
+
+def handle_writing_answer(msg):
+    """Yozma rejimda foydalanuvchi javobini tekshiradi."""
+    uid = msg.chat.id
+    quiz = quiz_state.get(uid)
+    if not quiz: return
+    if quiz["index"] >= len(quiz["words"]):
+        finish(uid); return
+
+    wid, uz, eng = quiz["words"][quiz["index"]]
+    # Foydalanuvchi javobini normallashtiramiz (trim + bo'shliqlarni siqish + casefold)
+    user_ans = " ".join(msg.text.split()).casefold()
+    # Barcha sinonimlar to'g'ri javob sifatida qabul qilinadi
+    accepted = {s.casefold() for s in storage.parse_synonyms(eng)}
+    is_correct = user_ans in accepted
+
+    if is_correct:
+        quiz["correct"] += 1
+        bot.send_message(uid,
+            f"✅ *To'g'ri!*\n\n🇺🇿 {esc(uz.upper())} → 🇬🇧 {esc(eng)}\n\n"
+            f"📝 _Mashq rejimi — quti o'zgarmaydi_",
+            parse_mode="Markdown")
+    else:
+        quiz["wrong"].append((uz, eng))
+        bot.send_message(uid,
+            f"❌ *Xato!*\n\n"
+            f"Siz yozdingiz: _{esc(msg.text.strip())}_\n"
+            f"✔️ To'g'ri javob: *{esc(eng)}*\n\n"
+            f"🇺🇿 {esc(uz.upper())} → 🇬🇧 {esc(eng)}\n"
+            f"📝 _Mashq rejimi — quti o'zgarmaydi_",
+            parse_mode="Markdown")
+
+    quiz["index"] += 1
+    ask_q(uid)
+
 def ask_q(uid):
     quiz = quiz_state.get(uid)
     if not quiz: return
     if quiz["index"] >= len(quiz["words"]): finish(uid); return
-    
+
+    # "Barcha so'zlar" — yozma (writing) rejim; qolganlari variantli (choice)
+    if quiz.get("mode") == "all":
+        ask_writing(uid); return
+
     wid, uz, eng = quiz["words"][quiz["index"]]
     
     # 1. To'g'ri javob
-    correct_ans = eng.split(",")[0].strip() # Birinchi sinonimni olamiz
+    correct_ans = eng.split(",")[0].strip()  # Birinchi sinonimni olamiz
     
-    # 2. Barcha so'zlar ro'yxatidan tasodifiy 3 ta noto'g'ri javobni tanlash
-    all_words = storage.get_all_words(uid)
-    wrong_answers = []
+    # 2. Noto'g'ri javoblar uchun "pool" ni test boshida bir marta keshlaymiz
+    #    (har savolda DB ga murojaat qilmaslik uchun).
+    pool = quiz.get("distractor_pool")
+    if pool is None:
+        all_words = storage.get_all_words(uid)
+        seen, pool = set(), []
+        for w in all_words:
+            ans = w["eng"].split(",")[0].strip()
+            key = ans.lower()
+            if ans and key not in seen:
+                seen.add(key)
+                pool.append(ans)
+        quiz["distractor_pool"] = pool
     
-    # Faqat inglizcha so'zlarni to'playmiz, to'g'ri javoblarni chiqaramiz
-    eng_answers = [w["eng"].split(",")[0].strip() for w in all_words]
-    correct_synonyms = [s.strip().lower() for s in eng.split(",")]
-    
-    available_wrong = [a for a in eng_answers if a.lower() not in correct_synonyms]
+    correct_synonyms = {s.strip().lower() for s in eng.split(",")}
+    available_wrong = [a for a in pool if a.lower() not in correct_synonyms]
     
     # Agar lug'atda yetarli so'z bo'lmasa, sun'iy noto'g'ri javoblar qo'shamiz (fallback)
     if len(available_wrong) < 3:
         fallbacks = ["apple", "book", "car", "house", "computer", "water", "friend", "money", "time", "day"]
+        existing = {a.lower() for a in available_wrong}
         for f in fallbacks:
-            if f.lower() not in correct_synonyms and f not in available_wrong:
+            if f.lower() not in correct_synonyms and f.lower() not in existing:
                 available_wrong.append(f)
+                existing.add(f.lower())
                 
     # 3 tasini tasodifiy tanlab olamiz
     random.shuffle(available_wrong)
@@ -265,20 +384,20 @@ def ask_q(uid):
     quiz["options"] = options
     quiz["correct_idx"] = correct_idx
     
-    total = len(quiz["words"]); cur_i = quiz["index"] + 1
-    pct = int(quiz["index"]/total*100)
+    q_idx = quiz["index"]  # Shu savolning indeksi (stale-click tekshiruvi uchun)
+    total = len(quiz["words"]); cur_i = q_idx + 1
+    pct = int(q_idx/total*100)
     
     # Progress matni
-    text = (f"*{cur_i}/{total}* `[{bar(quiz['index'],total)}]` {pct}%\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"🇺🇿 Tarjima qiling: *{uz.upper()}*")
+    text = (f"*{cur_i}/{total}*  `[{bar(q_idx,total)}]`  {pct}%\n\n"
+            f"🇺🇿 Tarjima qiling: *{esc(uz.upper())}*")
             
     # Variantlarni klaviatura (inline button) orqali ko'rsatamiz
     kb = telebot.types.InlineKeyboardMarkup(row_width=1)
     
     for i, opt in enumerate(options):
-        # Tugma callback data sifatida indeksi (0,1,2,3) saqlanadi
-        btn = telebot.types.InlineKeyboardButton(f"{opt}", callback_data=f"quiz_{i}")
+        # callback_data: quiz_<savol_indeksi>_<variant_indeksi>
+        btn = telebot.types.InlineKeyboardButton(f"{opt}", callback_data=f"quiz_{q_idx}_{i}")
         kb.add(btn)
         
     bot.send_message(uid, text, parse_mode="Markdown", reply_markup=kb)
@@ -291,10 +410,21 @@ def cb_quiz_ans(call):
         bot.answer_callback_query(call.id, "⚠️ Test yakunlangan yoki bekor qilingan.")
         return
 
-    # Call datadan javob indeksini olish ("quiz_0", "quiz_1", va hokazo)
+    # Call datadan javob indeksini olish ("quiz_<q_idx>_<variant_idx>")
     parts = call.data.split("_")
-    if len(parts) < 2: return
-    selected_idx = int(parts[1])
+    if len(parts) < 3:
+        bot.answer_callback_query(call.id); return
+    q_idx = int(parts[1]); selected_idx = int(parts[2])
+
+    # Stale-click himoyasi: eski/takror bosilgan savol joriy savol bilan mos kelmasa,
+    # noto'g'ri so'zni baholab qo'ymaslik uchun e'tiborsiz qoldiramiz.
+    if q_idx != quiz["index"]:
+        bot.answer_callback_query(call.id, "⏭ Bu savol allaqachon javoblangan.")
+        try:
+            bot.edit_message_reply_markup(chat_id=uid, message_id=call.message.message_id, reply_markup=None)
+        except Exception:
+            pass
+        return
 
     wid, uz, eng = quiz["words"][quiz["index"]]
     correct_idx = quiz.get("correct_idx", -1)
@@ -305,32 +435,44 @@ def cb_quiz_ans(call):
     bot.answer_callback_query(call.id)
     
     # Xabarni o'zgartirib tugmalarni olib tashlash
-    bot.edit_message_reply_markup(chat_id=uid, message_id=call.message.message_id, reply_markup=None)
+    try:
+        bot.edit_message_reply_markup(chat_id=uid, message_id=call.message.message_id, reply_markup=None)
+    except Exception:
+        pass
+
+    # "Barcha so'zlar" — bu MASHQ rejimi: Leitner jadvaliga (box/next_review) tegmaydi.
+    # Faqat "new" va "box_N" rejimlari qutilarni o'zgartiradi.
+    practice = (quiz.get("mode") == "all")
 
     if is_correct:
         quiz["correct"] += 1
         w = storage.get_word_by_id(uid, wid)
         if w:
             old_box = w["box"]
-            new_box = min(old_box + 1, 5)
-            storage.update_box(uid, wid, new_box)
-            txt = f"✅ *To'g'ri!*\n\n🇺🇿 {uz.upper()} → 🇬🇧 {eng}\n\n🏆 *So'z yakunlandi!* Quti 5 ga yetdi!" if new_box == 5 else f"✅ *To'g'ri!*\n\n🇺🇿 {uz.upper()} → 🇬🇧 {eng}\n\n📦 Quti {old_box} → {new_box}"
+            if practice:
+                txt = f"✅ *To'g'ri!*\n\n🇺🇿 {esc(uz.upper())} → 🇬🇧 {esc(eng)}\n\n📝 _Mashq rejimi — quti o'zgarmaydi_"
+            else:
+                new_box = min(old_box + 1, 5)
+                storage.update_box(uid, wid, new_box)
+                txt = f"✅ *To'g'ri!*\n\n🇺🇿 {esc(uz.upper())} → 🇬🇧 {esc(eng)}\n\n🏆 *So'z yakunlandi!* Quti 5 ga yetdi!" if new_box == 5 else f"✅ *To'g'ri!*\n\n🇺🇿 {esc(uz.upper())} → 🇬🇧 {esc(eng)}\n\n📦 Quti {old_box} → {new_box}"
             bot.send_message(uid, txt, parse_mode="Markdown")
     else:
         quiz["wrong"].append((uz, eng))
-        storage.update_box(uid, wid, 1)
-        
+        if not practice:
+            storage.update_box(uid, wid, 1)
+
         # Foydalanuvchi tanlagan noto'g'ri javob matnini topish
         selected_text = "Noma'lum"
         if "options" in quiz and 0 <= selected_idx < len(quiz["options"]):
             selected_text = quiz["options"][selected_idx]
-            
+
+        footer = "📝 _Mashq rejimi — quti o'zgarmaydi_" if practice else "📦 → Quti 1 ga qaytarildi"
         bot.send_message(uid,
             f"❌ *Xato!*\n\n"
-            f"Siz tanladingiz: _{selected_text}_\n"
-            f"✔️ To'g'ri javob: *{eng}*\n\n"
-            f"🇺🇿 {uz.upper()} → 🇬🇧 {eng}\n"
-            f"📦 → Quti 1 ga qaytarildi",
+            f"Siz tanladingiz: _{esc(selected_text)}_\n"
+            f"✔️ To'g'ri javob: *{esc(eng)}*\n\n"
+            f"🇺🇿 {esc(uz.upper())} → 🇬🇧 {esc(eng)}\n"
+            f"{footer}",
             parse_mode="Markdown")
 
     quiz["index"] += 1
@@ -344,15 +486,14 @@ def finish(uid):
     rating = ("🏆 Mukammal natija!" if pct == 100 else "🌟 A'lo!" if pct >= 80
               else "👍 Yaxshi!" if pct >= 60 else "📚 O'rtacha" if pct >= 40 else "💪 Davom eting!")
     bot.send_message(uid,
-        f"🏁 *Test Yakunlandi!*\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"🏁 *Test Yakunlandi!*\n\n"
         f"📊 `[{bar(correct,total)}]` *{pct}%*\n\n"
         f"✅ To'g'ri: *{correct}* ta\n"
         f"❌ Xato:   *{len(wrong)}* ta\n"
         f"📝 Jami:   *{total}* ta\n\n{rating}",
         parse_mode="Markdown", reply_markup=main_menu())
     if wrong:
-        lines = "\n".join(f"  • *{u}* → `{e}`" for u, e in wrong)
+        lines = "\n".join(f"  • *{esc(u)}* → `{esc(e)}`" for u, e in wrong)
         bot.send_message(uid, f"📋 *Xato so'zlar — takrorlang:*\n\n{lines}", parse_mode="Markdown")
     else:
         bot.send_message(uid, "🎉 *Barcha javoblar to'g'ri!* Zo'r natija! 🥳")
@@ -369,8 +510,7 @@ def cmd_stats(msg):
         f"  {'┣' if i<5 else '┗'} {BOX_ICON[i]} Quti {i}: *{s['boxes'].get(i,0)}* ta\n"
         for i in range(1, 6))
     bot.send_message(uid,
-        f"📊 *Statistika*\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"📊 *Statistika*\n\n"
         f"📚 Jami so'zlar:      *{s['total']}* ta\n"
         f"🆕 Yangi (test yo'q): *{s['new']}* ta\n"
         f"🔴 Bugun takrorlash:  *{s['due']}* ta\n"
@@ -388,7 +528,7 @@ def cmd_words(msg): send_page(msg.chat.id, msg.chat.id, page=0)
 def cmd_search(msg):
     user_state[msg.chat.id] = "searching"
     bot.send_message(msg.chat.id,
-        "🔍 *Qidirish*\n━━━━━━━━━━━━━━━━━━━━\n\nO'zbek yoki ingliz tilida so'z kiriting:",
+        "🔍 *Qidirish*\n\nO'zbek yoki ingliz tilida so'z kiriting:",
         parse_mode="Markdown", reply_markup=back_menu())
 
 @bot.message_handler(func=lambda m: user_state.get(m.chat.id) == "searching")
@@ -396,9 +536,9 @@ def handle_search(msg):
     uid = msg.chat.id; q = msg.text.strip().lower(); user_state.pop(uid, None)
     words = storage.search_words(uid, q)
     if not words:
-        bot.send_message(uid, f"📭 *\"{q}\"* topilmadi.\n\n💡 Boshqa so'z bilan qidiring.",
+        bot.send_message(uid, f"📭 *\"{esc(q)}\"* topilmadi.\n\n💡 Boshqa so'z bilan qidiring.",
             parse_mode="Markdown", reply_markup=main_menu()); return
-    send_word_cards(uid, words[:20], header=f"🔍 *\"{q}\"* — {len(words)} ta natija:")
+    send_word_cards(uid, words[:20], header=f"🔍 *\"{esc(q)}\"* — {len(words)} ta natija:")
     bot.send_message(uid, "🏠 Bosh menyu:", reply_markup=main_menu())
 
 # ── TOZALASH ──────────────────────────────────────────────────────────────────
@@ -440,7 +580,7 @@ def cb_del_confirm(call):
     uz = storage.delete_word(uid, wid)
     if not uz:
         bot.answer_callback_query(call.id, "⚠️ So'z topilmadi."); return
-    bot.edit_message_text(f"🗑 *{uz}* o'chirildi.", call.message.chat.id, call.message.message_id, parse_mode="Markdown")
+    bot.edit_message_text(f"🗑 *{esc(uz)}* o'chirildi.", call.message.chat.id, call.message.message_id, parse_mode="Markdown")
     bot.answer_callback_query(call.id, "✅ O'chirildi!")
 
 @bot.callback_query_handler(func=lambda c: c.data.startswith("del_") and not c.data.startswith("del_confirm_"))
@@ -452,7 +592,7 @@ def cb_del(call):
     kb = telebot.types.InlineKeyboardMarkup()
     kb.row(telebot.types.InlineKeyboardButton("✅ Ha, o'chir", callback_data=f"del_confirm_{wid}"),
            telebot.types.InlineKeyboardButton("❌ Bekor",       callback_data="del_cancel"))
-    bot.edit_message_text(f"⚠️ *{w['uz']}* → `{w['eng']}`\n\nRostan o'chirmoqchimisiz?",
+    bot.edit_message_text(f"⚠️ *{esc(w['uz'])}* → `{esc(w['eng'])}`\n\nRostan o'chirmoqchimisiz?",
         call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=kb)
     bot.answer_callback_query(call.id)
 
@@ -470,21 +610,29 @@ def cb_edit(call):
     user_state[uid] = {"mode": "editing", "word_id": wid, "uz": w["uz"]}
     bot.answer_callback_query(call.id)
     bot.send_message(uid,
-        f"✏️ *{w['uz']}* — tahrirlash\n\n"
-        f"📌 Hozirgi tarjima: `{w['eng']}`\n\n"
+        f"✏️ *{esc(w['uz'])}* — tahrirlash\n\n"
+        f"📌 Hozirgi tarjima: `{esc(w['eng'])}`\n\n"
         f"Yangi tarjimani yozing (sinonimlar vergul bilan):",
         parse_mode="Markdown", reply_markup=back_menu())
 
 @bot.message_handler(func=lambda m: isinstance(user_state.get(m.chat.id), dict)
                                     and user_state[m.chat.id].get("mode") == "editing")
 def handle_edit(msg):
-    uid = msg.chat.id; st = user_state.pop(uid, {}); new_eng = msg.text.strip().lower()
-    if not new_eng:
+    uid = msg.chat.id; st = user_state.pop(uid, {}); raw = msg.text.strip().lower()
+    cleaned_list = storage.parse_synonyms(raw)
+    if not cleaned_list:
         bot.send_message(uid, "⚠️ Bo'sh qoldirish mumkin emas.", reply_markup=main_menu()); return
-    storage.update_word_eng(uid, st["word_id"], new_eng)
+    cleaned = ", ".join(cleaned_list)
+    storage.update_word_eng(uid, st["word_id"], cleaned)
     bot.send_message(uid,
-        f"✅ *{st['uz']}* yangilandi!\n\n📌 Yangi tarjima: `{new_eng}`",
+        f"✅ *{esc(st['uz'])}* yangilandi!\n\n📌 Yangi tarjima: `{esc(cleaned)}`",
         parse_mode="Markdown", reply_markup=main_menu())
+
+@bot.message_handler(func=lambda m: m.chat.id in quiz_state
+                                    and quiz_state[m.chat.id].get("mode") == "all"
+                                    and isinstance(m.text, str))
+def handle_writing(msg):
+    handle_writing_answer(msg)
 
 @bot.message_handler(func=lambda m: True)
 def handle_unknown(msg):
@@ -494,4 +642,6 @@ def handle_unknown(msg):
         bot.send_message(uid, "❓ Menyu tugmalaridan foydalaning.", reply_markup=main_menu())
 
 log.info("🚀 BrainBridge bot ishga tushdi...")
+import notifier
+notifier.start_scheduler(bot)
 bot.infinity_polling(skip_pending=True, timeout=30, long_polling_timeout=20)
