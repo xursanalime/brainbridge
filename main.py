@@ -170,11 +170,11 @@ def cmd_add(msg):
     user_state[msg.chat.id] = "adding"
     bot.send_message(msg.chat.id,
         "✏️ *So'z Qo'shish*\n\n"
-        "📌 *Format:* `o'zbek = ingliz`\n\n"
+        "📌 *Format:* `inglizcha-o'zbekcha`\n\n"
         "📝 *Ko'p so'z (har qatorga birdan):*\n"
-        "```\nkitob = book\nuy = house\n```\n\n"
+        "```\nbook-kitob\nhouse-uy\n```\n\n"
         "🔗 *Sinonimlar (vergul bilan):*\n"
-        "`ruxsat = allow, permit, let`\n\n"
+        "`allow, permit, let-ruxsat`\n\n"
         "⬇️ So'zlaringizni yuboring:",
         parse_mode="Markdown", reply_markup=back_menu())
 
@@ -184,8 +184,10 @@ def handle_add(msg):
     storage.register_user(uid, msg.from_user.first_name)
     for line in msg.text.strip().split("\n"):
         line = line.strip()
-        if not line or "=" not in line: continue
-        uz, eng = line.split("=", 1)
+        if not line or "-" not in line: continue
+        # Format: "inglizcha-o'zbekcha". Oxirgi "-" bo'yicha ajratamiz —
+        # shunda inglizcha qismda chiziqcha bo'lishi mumkin (mas: "e-mail-pochta").
+        eng, uz = line.rsplit("-", 1)
         uz, eng = uz.strip().lower(), eng.strip().lower()
         if not uz or not eng: skipped += 1; continue
         r = storage.add_word(uid, uz, eng)
@@ -230,7 +232,7 @@ def cmd_all_test(msg):
     random.shuffle(words)
     quiz_state[uid] = {"words": [(w["id"], w["uz"], w["eng"]) for w in words],
                        "index": 0, "correct": 0, "wrong": [], "used": [], "answers": [], "mode": "all"}
-    bot.send_message(uid, f"✍️ *Barcha So'zlar — Yozma Mashq*\n\n📚 Jami: *{len(words)} ta* so'z\n📝 _O'zbekchasi beriladi — inglizchasini yozing. Sinonimlardan birortasi ham to'g'ri._\n💪 Muvaffaqiyat!",
+    bot.send_message(uid, f"✍️ *Barcha So'zlar — Yozma Test*\n\n📚 Jami: *{len(words)} ta* so'z\n📝 _O'zbekchasi beriladi — inglizchasini yozing. Bir nechta sinonim bo'lsa, hammasini kiriting. Xato bo'lsa so'z Quti 1 ga qaytadi._\n💪 Muvaffaqiyat!",
         parse_mode="Markdown")
     ask_q(uid)
 
@@ -282,21 +284,31 @@ def cmd_box(msg):
 
 # ── SAVOL / JAVOB ─────────────────────────────────────────────────────────────
 def ask_writing(uid):
-    """Yozma rejim savoli: o'zbekcha ko'rsatiladi, user inglizchasini yozadi."""
+    """Yozma rejim savoli: o'zbekcha ko'rsatiladi, user inglizchasini yozadi.
+    Bir nechta sinonim bo'lsa — hammasini ketma-ket kiritish kerak."""
     quiz = quiz_state.get(uid)
     if not quiz: return
     if quiz["index"] >= len(quiz["words"]): finish(uid); return
 
     wid, uz, eng = quiz["words"][quiz["index"]]
+    # Shu so'zning sinonimlarini kuzatish uchun holatni tayyorlaymiz
+    syns = storage.parse_synonyms(eng)
+    quiz["w_remaining"] = [s.casefold() for s in syns]  # hali kiritilmaganlar
+    quiz["w_entered"] = []                               # to'g'ri kiritilganlar
+    quiz["w_total_syn"] = len(syns)
+
     total = len(quiz["words"]); cur_i = quiz["index"] + 1
     pct = int(quiz["index"]/total*100)
+    syn_hint = f"  ({quiz['w_total_syn']} ta sinonim)" if quiz["w_total_syn"] > 1 else ""
     text = (f"*{cur_i}/{total}*  `[{bar(quiz['index'],total)}]`  {pct}%\n\n"
             f"🇺🇿 *{esc(uz.upper())}*\n\n"
-            f"✍️ Inglizcha tarjimasini yozing:")
+            f"✍️ Inglizcha tarjimasini yozing{syn_hint}:")
     bot.send_message(uid, text, parse_mode="Markdown", reply_markup=back_menu())
 
 def handle_writing_answer(msg):
-    """Yozma rejimda foydalanuvchi javobini tekshiradi."""
+    """Yozma rejimda foydalanuvchi javobini tekshiradi.
+    - Barcha sinonimlar kiritilsa → to'g'ri (quti oshadi)
+    - Xato javob → so'z Quti 1 ga qaytadi"""
     uid = msg.chat.id
     quiz = quiz_state.get(uid)
     if not quiz: return
@@ -304,28 +316,61 @@ def handle_writing_answer(msg):
         finish(uid); return
 
     wid, uz, eng = quiz["words"][quiz["index"]]
-    # Foydalanuvchi javobini normallashtiramiz (trim + bo'shliqlarni siqish + casefold)
-    user_ans = " ".join(msg.text.split()).casefold()
-    # Barcha sinonimlar to'g'ri javob sifatida qabul qilinadi
-    accepted = {s.casefold() for s in storage.parse_synonyms(eng)}
-    is_correct = user_ans in accepted
+    user_ans = " ".join(msg.text.split()).casefold()  # trim + bo'shliq + casefold
 
-    if is_correct:
-        quiz["correct"] += 1
-        bot.send_message(uid,
-            f"✅ *To'g'ri!*\n\n🇺🇿 {esc(uz.upper())} → 🇬🇧 {esc(eng)}\n\n"
-            f"📝 _Mashq rejimi — quti o'zgarmaydi_",
-            parse_mode="Markdown")
-    else:
-        quiz["wrong"].append((uz, eng))
-        bot.send_message(uid,
-            f"❌ *Xato!*\n\n"
-            f"Siz yozdingiz: _{esc(msg.text.strip())}_\n"
-            f"✔️ To'g'ri javob: *{esc(eng)}*\n\n"
-            f"🇺🇿 {esc(uz.upper())} → 🇬🇧 {esc(eng)}\n"
-            f"📝 _Mashq rejimi — quti o'zgarmaydi_",
-            parse_mode="Markdown")
+    # Agar holat hali tayyorlanmagan bo'lsa (xavfsizlik uchun), tayyorlaymiz
+    if "w_remaining" not in quiz:
+        syns = storage.parse_synonyms(eng)
+        quiz["w_remaining"] = [s.casefold() for s in syns]
+        quiz["w_entered"] = []
+        quiz["w_total_syn"] = len(syns)
 
+    remaining = quiz["w_remaining"]
+    entered = quiz["w_entered"]
+
+    if user_ans in remaining:
+        # To'g'ri sinonim kiritildi
+        remaining.remove(user_ans)
+        entered.append(user_ans)
+        if not remaining:
+            # Barcha sinonimlar kiritildi → so'z to'g'ri yakunlandi
+            quiz["correct"] += 1
+            w = storage.get_word_by_id(uid, wid)
+            old_box = w["box"] if w else 0
+            new_box = min(old_box + 1, 5)
+            storage.update_box(uid, wid, new_box)
+            box_txt = "🏆 *So'z yakunlandi!* Quti 5 ga yetdi!" if new_box == 5 else f"📦 Quti {old_box} → {new_box}"
+            bot.send_message(uid,
+                f"✅ *To'g'ri!*\n\n🇺🇿 {esc(uz.upper())} → 🇬🇧 {esc(eng)}\n\n{box_txt}",
+                parse_mode="Markdown")
+            quiz["index"] += 1
+            ask_q(uid)
+        else:
+            # Yana sinonim qoldi — o'sha so'zda qolamiz
+            bot.send_message(uid,
+                f"✅ To'g'ri! Yana *{len(remaining)} ta* sinonim qoldi.\n"
+                f"✍️ Keyingisini kiriting:",
+                parse_mode="Markdown")
+        return
+
+    if user_ans in entered:
+        # Allaqachon kiritilgan sinonim — jarima yo'q, qayta so'raymiz
+        bot.send_message(uid,
+            f"♻️ Buni allaqachon yozdingiz. Boshqa sinonimni kiriting "
+            f"(*{len(remaining)} ta* qoldi):",
+            parse_mode="Markdown")
+        return
+
+    # Noto'g'ri javob → so'z Quti 1 ga qaytadi
+    quiz["wrong"].append((uz, eng))
+    storage.update_box(uid, wid, 1)
+    bot.send_message(uid,
+        f"❌ *Xato!*\n\n"
+        f"Siz yozdingiz: _{esc(msg.text.strip())}_\n"
+        f"✔️ To'g'ri javob: *{esc(eng)}*\n\n"
+        f"🇺🇿 {esc(uz.upper())} → 🇬🇧 {esc(eng)}\n"
+        f"📦 → Quti 1 ga qaytarildi",
+        parse_mode="Markdown")
     quiz["index"] += 1
     ask_q(uid)
 
