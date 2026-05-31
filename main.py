@@ -55,6 +55,24 @@ def esc(text) -> str:
         return ""
     return re.sub(r"([_*`\[])", r"\\\1", str(text))
 
+def split_pair(line: str):
+    """'inglizcha - o'zbekcha' qatorini (eng, uz) ga ajratadi.
+
+    Ajratuvchi sifatida uzun tire (—), o'rta tire (–), oddiy tire (-) yoki '='
+    qabul qilinadi. Uzun/o'rta tire va '=' so'z ichida uchramaydi, shuning uchun
+    ular birinchi uchragan joyda ajratiladi. Oddiy tire esa 'e-mail' kabi
+    so'zlarda bo'lishi mumkin, shuning uchun oxirgi tire bo'yicha ajratiladi.
+    Ajratuvchi topilmasa None qaytadi.
+    """
+    for sep in ("—", "–", "="):
+        if sep in line:
+            eng, uz = line.split(sep, 1)
+            return eng, uz
+    if "-" in line:
+        eng, uz = line.rsplit("-", 1)
+        return eng, uz
+    return None
+
 def bar(done, total, w=10):
     f = int((done/total)*w) if total else 0
     return "█"*f + "░"*(w-f)
@@ -170,11 +188,11 @@ def cmd_add(msg):
     user_state[msg.chat.id] = "adding"
     bot.send_message(msg.chat.id,
         "✏️ *So'z Qo'shish*\n\n"
-        "📌 *Format:* `inglizcha-o'zbekcha`\n\n"
+        "📌 *Format:* `inglizcha - o'zbekcha`\n\n"
         "📝 *Ko'p so'z (har qatorga birdan):*\n"
-        "```\nbook-kitob\nhouse-uy\n```\n\n"
+        "```\nbook - kitob\nhouse - uy\n```\n\n"
         "🔗 *Sinonimlar (vergul bilan):*\n"
-        "`allow, permit, let-ruxsat`\n\n"
+        "`allow, permit, let - ruxsat`\n\n"
         "⬇️ So'zlaringizni yuboring:",
         parse_mode="Markdown", reply_markup=back_menu())
 
@@ -184,10 +202,10 @@ def handle_add(msg):
     storage.register_user(uid, msg.from_user.first_name)
     for line in msg.text.strip().split("\n"):
         line = line.strip()
-        if not line or "-" not in line: continue
-        # Format: "inglizcha-o'zbekcha". Oxirgi "-" bo'yicha ajratamiz —
-        # shunda inglizcha qismda chiziqcha bo'lishi mumkin (mas: "e-mail-pochta").
-        eng, uz = line.rsplit("-", 1)
+        if not line: continue
+        pair = split_pair(line)
+        if not pair: continue
+        eng, uz = pair
         uz, eng = uz.strip().lower(), eng.strip().lower()
         if not uz or not eng: skipped += 1; continue
         r = storage.add_word(uid, uz, eng)
