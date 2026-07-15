@@ -30,6 +30,7 @@ def _load_backup() -> dict:
 def _save_backup(data: dict):
     tmp_path = BACKUP_PATH + ".tmp"
     try:
+        os.makedirs(os.path.dirname(BACKUP_PATH) or ".", exist_ok=True)
         with open(tmp_path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2, default=str)
         os.replace(tmp_path, BACKUP_PATH)
