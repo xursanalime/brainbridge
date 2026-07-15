@@ -1,0 +1,32 @@
+# Environment
+.env
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+venv/
+env/
+.venv/
+
+# Data files (backup, local only)
+words.json
+stats.json
+data.json
+words_backup.json
+backup.sql
+
+# Local-only scripts / scratch work
+scratch/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+.claude/
+
+# Logs
+*.log

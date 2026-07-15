@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: brainbridge_user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: brainbridge
+    ports:
+      - "5434:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  bot:
+    build: .
+    restart: always
+    environment:
+      BOT_TOKEN: ${BOT_TOKEN}
+      DATABASE_URL: ${DATABASE_URL}
+      BACKUP_JSON_PATH: /app/data/words_backup.json
+    volumes:
+      - botdata:/app/data
+    depends_on:
+      - db
+
+volumes:
+  pgdata:
+  botdata:
